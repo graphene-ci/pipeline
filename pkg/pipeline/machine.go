@@ -3,7 +3,7 @@ package pipeline
 import (
 	"errors"
 
-	"github.com/graphene-ci/pipeline/ref"
+	"github.com/graphene-ci/pipeline/pkg/ref"
 )
 
 // CloudSource asks graphene to create the machine in a cloud. The record

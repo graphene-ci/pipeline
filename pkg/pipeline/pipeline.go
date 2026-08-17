@@ -18,9 +18,9 @@ import (
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
-	"github.com/graphene-ci/pipeline/id"
-	"github.com/graphene-ci/pipeline/ref"
-	"github.com/graphene-ci/pipeline/wire"
+	"github.com/graphene-ci/pipeline/pkg/id"
+	"github.com/graphene-ci/pipeline/pkg/ref"
+	"github.com/graphene-ci/pipeline/pkg/wire"
 )
 
 // Re-exported reference types: what travels instead of values.

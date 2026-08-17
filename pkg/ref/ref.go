@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/graphene-ci/pipeline/id"
+	"github.com/graphene-ci/pipeline/pkg/id"
 )
 
 // SecretRef names a secret. The value is resolved by the consumer (agent

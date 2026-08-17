@@ -3,7 +3,7 @@ package pipeline
 import (
 	"errors"
 
-	"github.com/graphene-ci/pipeline/ref"
+	"github.com/graphene-ci/pipeline/pkg/ref"
 )
 
 // ArtifactSpec is the desired state of an artifact record: a durable

@@ -6,7 +6,7 @@ package wire
 import (
 	"go.temporal.io/sdk/temporal"
 
-	"github.com/graphene-ci/pipeline/id"
+	"github.com/graphene-ci/pipeline/pkg/id"
 )
 
 // ServerQueue is the task queue of the graphene server worker: system

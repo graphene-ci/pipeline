@@ -12,9 +12,9 @@ import (
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
-	"github.com/graphene-ci/pipeline"
-	"github.com/graphene-ci/pipeline/id"
-	"github.com/graphene-ci/pipeline/ref"
+	"github.com/graphene-ci/pipeline/pkg/pipeline"
+	"github.com/graphene-ci/pipeline/pkg/id"
+	"github.com/graphene-ci/pipeline/pkg/ref"
 )
 
 // Kind is the entity kind name; workflow IDs are "artifact/{artifact-id}".
