@@ -29,8 +29,8 @@ the agent import types from here — nothing here imports them back.
   Temporal packages.
 - `wire` — cross-component conventions (queue names, server activity
   names, search attribute keys).
-- root (`pipeline`) — the only package with workflow code; the server
-  contract it speaks is the activity names in `wire`.
+- root (`pipeline`) — the user-facing workflow helpers; the server
+  contract they speak is the activity names in `wire`.
 - `flow/*` — temporal flows of the system resources: definition + `Ops`
   contract; `Ops` implementations live in the graphene server. Flow
   packages import the root package for shared types, never the other way
