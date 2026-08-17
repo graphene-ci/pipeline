@@ -1,0 +1,35 @@
+# AGENTS.md — pipeline
+
+The user-facing pipeline library of graphene vision v3 (`../GRAPHENE.MD`
+at the org root) and the shared vocabulary of the system: the server and
+the agent import types from here — nothing here imports them back.
+
+## Before making changes
+
+1. Read `../GRAPHENE.MD`. A change that contradicts the vision updates
+   the vision first.
+2. `make lint` and `make test` must be green before push.
+
+## Code rules
+
+- Go; code, names, and comments in English. Commits are Conventional
+  Commits, no `Co-Authored-By`.
+- Identifiers are the `id` types, suffix `Id` (the var-naming exception
+  is recorded in `.golangci.yaml`).
+- Secrets and large data never enter specs, logs, or Temporal history —
+  references only (`ref`).
+- Machine-execution helpers take named registered functions, never
+  closures.
+- The machine-execution pair naming (`OnMachine`/`Action`) is
+  provisional — do not spread the names further until decided.
+
+## Package boundaries
+
+- `id`, `ref` — vocabulary; import nothing from this repository and no
+  Temporal packages.
+- `wire` — cross-component conventions (queue names, server activity
+  names, search attribute keys).
+- root (`pipeline`) — the only package with workflow code; the server
+  contract it speaks is the activity names in `wire`.
+- No server code, no agent code, no entity flow definitions here — those
+  live in the graphene and agent repositories.
