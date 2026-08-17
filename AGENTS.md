@@ -31,5 +31,9 @@ the agent import types from here — nothing here imports them back.
   names, search attribute keys).
 - root (`pipeline`) — the only package with workflow code; the server
   contract it speaks is the activity names in `wire`.
-- No server code, no agent code, no entity flow definitions here — those
-  live in the graphene and agent repositories.
+- `flow/*` — temporal flows of the system resources: definition + `Ops`
+  contract; `Ops` implementations live in the graphene server. Flow
+  packages import the root package for shared types, never the other way
+  around.
+- No server code and no agent code here — those live in the graphene and
+  agent repositories.
