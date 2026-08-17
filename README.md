@@ -30,6 +30,7 @@ provisional.
 | `id` | Identifier dictionary (suffix `Id`) |
 | `ref` | `SecretRef`, `BlobRef`, `OwnerRef` |
 | `wire` | Cross-component conventions: queue names, server activity names, search attributes |
+| `flow/machine`, `flow/artifact` | Temporal flows of the system resources (definitions on the temporal-entity chassis + lifecycle code); the graphene server registers them on its worker and implements their `Ops` |
 
 ## Build and check
 
