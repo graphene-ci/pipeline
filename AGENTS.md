@@ -14,10 +14,10 @@ the agent import types from here — nothing here imports them back.
 
 - Go; code, names, and comments in English. Commits are Conventional
   Commits, no `Co-Authored-By`.
-- Identifiers are the `id` types, suffix `Id` (the var-naming exception
+- Identifiers are the `pkg/id` types, suffix `Id` (the var-naming exception
   is recorded in `.golangci.yaml`).
 - Secrets and large data never enter specs, logs, or Temporal history —
-  references only (`ref`).
+  references only (`pkg/ref`).
 - Machine-execution helpers take named registered functions, never
   closures.
 - The machine-execution pair naming (`OnMachine`/`Action`) is
@@ -25,13 +25,13 @@ the agent import types from here — nothing here imports them back.
 
 ## Package boundaries
 
-- `id`, `ref` — vocabulary; import nothing from this repository and no
+- `pkg/id`, `pkg/ref` — vocabulary; import nothing from this repository and no
   Temporal packages.
-- `wire` — cross-component conventions (queue names, server activity
+- `pkg/wire` — cross-component conventions (queue names, server activity
   names, search attribute keys).
-- root (`pipeline`) — the user-facing workflow helpers; the server
+- `pkg/pipeline` — the user-facing workflow helpers; the server
   contract they speak is the activity names in `wire`.
-- `flow/*` — temporal flows of the system resources: definition + `Ops`
+- `pkg/flow/*` — temporal flows of the system resources: definition + `Ops`
   contract; `Ops` implementations live in the graphene server. Flow
   packages import the root package for shared types, never the other way
   around.

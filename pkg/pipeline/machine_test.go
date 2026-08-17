@@ -3,7 +3,7 @@ package pipeline
 import (
 	"testing"
 
-	"github.com/graphene-ci/pipeline/ref"
+	"github.com/graphene-ci/pipeline/pkg/ref"
 )
 
 func TestMachineSpecValidate(t *testing.T) {

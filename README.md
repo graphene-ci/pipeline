@@ -26,11 +26,11 @@ provisional.
 
 | Package | What it is |
 |---|---|
-| root (`pipeline`) | The user-facing library: resource declaration, machine execution, references |
-| `id` | Identifier dictionary (suffix `Id`) |
-| `ref` | `SecretRef`, `BlobRef`, `OwnerRef` |
-| `wire` | Cross-component conventions: queue names, server activity names, search attributes |
-| `flow/machine`, `flow/artifact` | Temporal flows of the system resources (definitions on the temporal-entity chassis + lifecycle code); the graphene server registers them on its worker and implements their `Ops` |
+| `pkg/pipeline` | The user-facing library: resource declaration, machine execution, references |
+| `pkg/id` | Identifier dictionary (suffix `Id`) |
+| `pkg/ref` | `SecretRef`, `BlobRef`, `OwnerRef` |
+| `pkg/wire` | Cross-component conventions: queue names, server activity names, search attributes |
+| `pkg/flow/machine`, `pkg/flow/artifact` | Temporal flows of the system resources (definitions on the temporal-entity chassis + lifecycle code); the graphene server registers them on its worker and implements their `Ops` |
 
 ## Build and check
 
