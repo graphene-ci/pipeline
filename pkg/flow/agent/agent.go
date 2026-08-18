@@ -20,6 +20,7 @@ import (
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
+	"github.com/graphene-ci/pipeline/pkg/flow/ownership"
 	"github.com/graphene-ci/pipeline/pkg/id"
 	"github.com/graphene-ci/pipeline/pkg/pipeline"
 )
@@ -27,9 +28,11 @@ import (
 // Kind is the entity kind name; workflow IDs are "agent/{agent-id}".
 const Kind = entity.KindName("agent")
 
-// State extends the shared observable state with flow-internal fields.
+// State extends the shared observable state with flow-internal fields
+// and the owned half of the tree.
 type State struct {
 	pipeline.AgentState
+	ownership.State
 	ConnectedAt time.Time `json:"connectedAt,omitempty"`
 }
 
@@ -93,6 +96,7 @@ func Definition(opts Options) *entdefine.Definition[pipeline.AgentSpec, State] {
 		entdefine.WithSearchAttributes[pipeline.AgentSpec, State](true),
 	)
 	entdefine.Handle(def, publishCapability)
+	ownership.Register(def, func(st *State) *ownership.State { return &st.State })
 	return def
 }
 
