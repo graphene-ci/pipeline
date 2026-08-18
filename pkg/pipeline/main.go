@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/interceptor"
 	"go.temporal.io/sdk/worker"
 
 	"github.com/graphene-ci/pipeline/pkg/id"
@@ -86,7 +87,11 @@ func serve(pipelineId id.PipelineId, workflowFn any, opts ...MainOption) error {
 
 	switch role {
 	case "run":
-		w := worker.New(c, wire.RunQueue(runId), worker.Options{})
+		w := worker.New(c, wire.RunQueue(runId), worker.Options{
+			// Guaranteed teardown: every exit path of the run workflow
+			// triggers the server's cleanup.
+			Interceptors: []interceptor.WorkerInterceptor{&cleanupInterceptor{}},
+		})
 		w.RegisterWorkflow(workflowFn)
 		for _, fn := range cfg.activities {
 			w.RegisterActivity(fn)
