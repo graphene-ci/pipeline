@@ -30,4 +30,6 @@ func (s ArtifactSpec) Validate() error {
 // ArtifactState is the observed state of an artifact record.
 type ArtifactState struct {
 	Verified bool `json:"verified"`
+	// Blob is where the verified bytes are.
+	Blob ref.BlobRef `json:"blob"`
 }
