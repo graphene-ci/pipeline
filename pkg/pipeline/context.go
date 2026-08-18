@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"strings"
 	"sync"
 
 	"go.temporal.io/sdk/client"
@@ -23,12 +24,14 @@ type Context struct {
 	rec        *recorder
 }
 
-// RunId is the identity of this run.
+// RunId is the identity of this run. The run workflow's ID on the wire
+// is "run/{runId}" — this strips the prefix back off.
 func (c Context) RunId() id.RunId {
 	if c.rec != nil {
 		return ""
 	}
-	return id.RunId(workflow.GetInfo(c.Context).WorkflowExecution.ID)
+	full := workflow.GetInfo(c.Context).WorkflowExecution.ID
+	return id.RunId(strings.TrimPrefix(full, "run/"))
 }
 
 // Logger is the run's structured logger.
