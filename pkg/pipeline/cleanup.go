@@ -7,6 +7,7 @@ import (
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
+	"github.com/graphene-ci/pipeline/pkg/id"
 	"github.com/graphene-ci/pipeline/pkg/wire"
 )
 
@@ -50,5 +51,5 @@ func cleanup(ctx workflow.Context) {
 	})
 	// A cleanup failure must not mask the run's own result; the activity
 	// retries hard before giving up, and the error is visible in history.
-	_ = workflow.ExecuteActivity(actx, wire.RunCleanupActivity, RunId(ctx)).Get(dctx, nil)
+	_ = workflow.ExecuteActivity(actx, wire.RunCleanupActivity, id.RunId(workflow.GetInfo(ctx).WorkflowExecution.ID)).Get(dctx, nil)
 }

@@ -4,9 +4,12 @@
 package wire
 
 import (
+	"time"
+
 	"go.temporal.io/sdk/temporal"
 
 	"github.com/graphene-ci/pipeline/pkg/id"
+	"github.com/graphene-ci/pipeline/pkg/ref"
 )
 
 // ServerQueue is the task queue of the graphene server worker: system
@@ -49,7 +52,26 @@ const (
 	// delete everything the run owns, stop its machine containers. The
 	// run worker calls it on every exit path of the run workflow.
 	RunCleanupActivity = "server.run.cleanup"
+	// TransferResourceActivity moves a resource (with its subtree) under
+	// a new owner. Ownership is given away, never taken: the caller must
+	// be the current owner's side.
+	TransferResourceActivity = "server.resource.transfer"
 )
+
+// TransferResourceRequest asks the server to reparent a resource.
+type TransferResourceRequest struct {
+	Resource ref.OwnerRef `json:"resource"`
+	NewOwner ref.OwnerRef `json:"newOwner"`
+	// Keep bounds the stay under the new owner (stand TTL); zero keeps
+	// the resource until an explicit delete.
+	Keep time.Duration `json:"keep,omitempty"`
+}
+
+// StandOwner is the owner reference of a pipeline's Stand — the
+// permanent owner every pipeline has.
+func StandOwner(p id.PipelineId) ref.OwnerRef {
+	return ref.OwnerRef("stand/" + string(p))
+}
 
 // EnsureContainerRequest asks the server to bring the worker container
 // of (machine × run) up on the machine's agent.
@@ -84,6 +106,8 @@ const (
 	// EnvInsecure ("1"/"true") disables TLS towards the server — dev
 	// contours only.
 	EnvInsecure = "GRAPHENE_INSECURE"
+	// EnvHTTP is the server's HTTP base URL (blob API, runs API).
+	EnvHTTP = "GRAPHENE_HTTP"
 )
 
 // Search attribute keys used across the system in addition to the ones
