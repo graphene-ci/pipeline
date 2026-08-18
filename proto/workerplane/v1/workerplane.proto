@@ -1,0 +1,74 @@
+// Worker plane: what the RUNNING USER CODE calls — secrets at the point
+// of use, capabilities from where they were installed, blob bytes. The
+// namespace comes from the worker's token; a worker cannot ask for
+// another namespace's anything. The contract lives in the pipeline
+// repository — the worker side owns it; the server imports and serves.
+syntax = "proto3";
+
+package graphene.workerplane.v1;
+
+option go_package = "github.com/graphene-ci/pipeline/pkg/proto/workerplane/v1;workerplanev1";
+
+// SecretsAPI resolves secret names to values — exactly once, at the
+// point of use; the value never travels back into records.
+service SecretsAPI {
+  rpc GetSecret(GetSecretRequest) returns (GetSecretResponse);
+}
+
+message GetSecretRequest {
+  string name = 1;
+}
+
+message GetSecretResponse {
+  string value = 1;
+}
+
+// CapabilitiesAPI publishes what a machine now CAN — written down where
+// the installation happened.
+service CapabilitiesAPI {
+  rpc PublishCapability(PublishCapabilityRequest) returns (PublishCapabilityResponse);
+}
+
+message Capability {
+  string name = 1;
+  // Version is informative; matching is by label equality only.
+  string version = 2;
+  map<string, string> labels = 3;
+  // BroughtBy is free text: an installer, a person, an image.
+  string brought_by = 4;
+  bool ready = 5;
+}
+
+message PublishCapabilityRequest {
+  string agent_id = 1;
+  Capability capability = 2;
+}
+
+message PublishCapabilityResponse {}
+
+// BlobsAPI moves artifact bytes. Content-addressed: the digest IS the
+// location; a repeated Put of the same bytes is a no-op by construction.
+service BlobsAPI {
+  rpc PutBlob(stream PutBlobRequest) returns (PutBlobResponse);
+  rpc GetBlob(GetBlobRequest) returns (stream GetBlobResponse);
+}
+
+message PutBlobRequest {
+  // Chunks of the blob, in order.
+  bytes chunk = 1;
+}
+
+message PutBlobResponse {
+  // Digest is "sha256:<hex>"; Location addresses the bytes in the store.
+  string digest = 1;
+  string location = 2;
+  int64 size = 3;
+}
+
+message GetBlobRequest {
+  string location = 1;
+}
+
+message GetBlobResponse {
+  bytes chunk = 1;
+}

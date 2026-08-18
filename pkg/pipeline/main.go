@@ -65,6 +65,10 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) e
 	}
 
 	copts := client.Options{HostPort: os.Getenv(wire.EnvAddress)}
+	// The namespace is the run's isolation unit, symmetric to Temporal's.
+	if namespace := os.Getenv(wire.EnvNamespace); namespace != "" {
+		copts.Namespace = namespace
+	}
 	// The address is the server's gRPC proxy — the single door; the
 	// run-scoped token authenticates every Temporal call through it.
 	if token := os.Getenv(wire.EnvToken); token != "" {

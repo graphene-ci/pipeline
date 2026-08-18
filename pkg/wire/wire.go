@@ -104,7 +104,7 @@ func StandOwner(p id.PipelineId) ref.OwnerRef {
 // of (machine × run) up on the machine's agent.
 type EnsureContainerRequest struct {
 	AgentId id.AgentId `json:"agentId"`
-	RunId     id.RunId     `json:"runId"`
+	RunId   id.RunId   `json:"runId"`
 	// Image is the run's own worker image: the version of the run is the
 	// version of every container it touches.
 	Image string `json:"image"`
@@ -133,8 +133,9 @@ const (
 	// EnvInsecure ("1"/"true") disables TLS towards the server — dev
 	// contours only.
 	EnvInsecure = "GRAPHENE_INSECURE"
-	// EnvHTTP is the server's HTTP base URL (blob API, runs API).
-	EnvHTTP = "GRAPHENE_HTTP"
+	// EnvNamespace is the worker's namespace — symmetric to the Temporal
+	// namespace it runs in; default "default".
+	EnvNamespace = "GRAPHENE_NAMESPACE"
 )
 
 // Search attribute keys used across the system in addition to the ones

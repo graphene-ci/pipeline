@@ -3,11 +3,8 @@ package pipeline
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"time"
 
@@ -18,6 +15,7 @@ import (
 	"github.com/graphene-ci/pipeline/pkg/id"
 	"github.com/graphene-ci/pipeline/pkg/ref"
 	"github.com/graphene-ci/pipeline/pkg/wire"
+	"github.com/graphene-ci/pipeline/pkg/workerapi"
 )
 
 // NewArtifact declares an artifact from its source: the bytes are
@@ -99,36 +97,12 @@ func uploadBytesActivity(ctx context.Context, b []byte) (ref.BlobRef, error) {
 	return uploadBlob(ctx, bytes.NewReader(b))
 }
 
-// uploadBlob streams bytes to the server blob API. The location is the
-// content digest — content-addressed, idempotent by construction.
+// uploadBlob streams bytes through the worker plane into the store —
+// content-addressed, the digest computed by the server.
 func uploadBlob(ctx context.Context, r io.Reader) (ref.BlobRef, error) {
-	base := os.Getenv(wire.EnvHTTP)
-	if base == "" {
-		return ref.BlobRef{}, fmt.Errorf("%s is not set", wire.EnvHTTP)
-	}
-	// Digest first: the blob API is content-addressed.
-	buf, err := io.ReadAll(r)
+	digest, location, size, err := workerapi.PutBlob(ctx, r)
 	if err != nil {
-		return ref.BlobRef{}, err
+		return ref.BlobRef{}, fmt.Errorf("blob upload: %w", err)
 	}
-	sum := sha256.Sum256(buf)
-	digest := "sha256:" + hex.EncodeToString(sum[:])
-	location := "blobs/" + hex.EncodeToString(sum[:])
-
-	//nolint:gosec // the base URL is the installation's own server from the env — the only door
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, base+"/api/v1/blobs/"+location, bytes.NewReader(buf))
-	if err != nil {
-		return ref.BlobRef{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+os.Getenv(wire.EnvToken))
-	resp, err := http.DefaultClient.Do(req) //nolint:gosec // see request construction above
-	if err != nil {
-		return ref.BlobRef{}, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return ref.BlobRef{}, fmt.Errorf("blob upload: %s: %s", resp.Status, raw)
-	}
-	return ref.BlobRef{Digest: digest, Location: location, Size: int64(len(buf))}, nil
+	return ref.BlobRef{Digest: digest, Location: location, Size: size}, nil
 }
