@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/graphene-ci/pipeline/pkg/ref"
+	"github.com/graphene-ci/pipeline/pkg/wire"
 )
 
 // SSHInstall asks the system to put the agent on a machine that already
@@ -49,6 +50,9 @@ type MachineSpec struct {
 
 	Owner  ref.OwnerRef      `json:"owner,omitempty"`
 	Labels map[string]string `json:"labels,omitempty"`
+	// Needs are capability requirements: readiness additionally waits
+	// until each is present, ready, and matching.
+	Needs []wire.NeedSpec `json:"needs,omitempty"`
 }
 
 // Validate checks the spec structurally (deterministic).
@@ -65,11 +69,82 @@ func (s MachineSpec) Validate() error {
 }
 
 // MachineState is the observed state of a machine record: what the agent
-// reported about the real machine behind it.
+// reported about the real machine behind it, plus what the machine CAN —
+// its published capabilities.
 type MachineState struct {
 	Addresses      []string `json:"addresses,omitempty"`
 	AgentConnected bool     `json:"agentConnected"`
 	// FactsDigest references the machine facts blob; the facts themselves
 	// live outside the record.
 	FactsDigest string `json:"factsDigest,omitempty"`
+	// Capabilities is what the machine can, WRITTEN DOWN — never
+	// discovered: each exists because something published it (an
+	// installer, a person, a machine image).
+	Capabilities []Capability `json:"capabilities,omitempty"`
+}
+
+// Capability is one thing a machine can do. Part of the machine's
+// record — a capability belongs to the machine, not to whoever
+// published it: the installer's run may die, docker stays installed.
+type Capability struct {
+	Name string `json:"name"`
+	// Version is informative: requirements match labels by equality,
+	// never compare versions — a comparison the system understood would
+	// be one more thing to be wrong about.
+	Version string `json:"version,omitempty"`
+	// Labels are matched by Need constraints — equality and In only.
+	Labels map[string]string `json:"labels,omitempty"`
+	// BroughtBy is free text: an installer, a person, an image — a
+	// reference would refuse the last two.
+	BroughtBy string `json:"broughtBy,omitempty"`
+	// Ready is set by the publisher.
+	Ready bool `json:"ready"`
+}
+
+// NeedsSatisfied reports whether every requirement is met by the
+// published capabilities — k8s label-selector semantics.
+func NeedsSatisfied(needs []wire.NeedSpec, caps []Capability) bool {
+	for _, need := range needs {
+		if !needSatisfied(need, caps) {
+			return false
+		}
+	}
+	return true
+}
+
+func needSatisfied(need wire.NeedSpec, caps []Capability) bool {
+	for _, c := range caps {
+		if c.Name != need.Name || !c.Ready {
+			continue
+		}
+		if capabilityMatches(need, c) {
+			return true
+		}
+	}
+	return false
+}
+
+func capabilityMatches(need wire.NeedSpec, c Capability) bool {
+	for k, v := range need.MatchLabels {
+		if c.Labels[k] != v {
+			return false
+		}
+	}
+	for k, values := range need.In {
+		got, ok := c.Labels[k]
+		if !ok {
+			return false
+		}
+		found := false
+		for _, v := range values {
+			if got == v {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }

@@ -10,6 +10,7 @@ package activity
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"go.temporal.io/sdk/temporal"
@@ -90,6 +91,30 @@ func WithHeartbeat(d time.Duration) Option {
 	return func(o *options) { o.heartbeat = d }
 }
 
+// ActivityAll executes the call on EVERY target in parallel — "run it on
+// all who are marked": pair it with pipeline.SelectAgents. Results align
+// with targets; failures are joined into one error naming each agent —
+// partial success is visible, not hidden.
+func ActivityAll[Res any](ctx pipeline.Context, targets []Target, call Call[Res], opts ...Option) ([]Res, error) {
+	var zero []Res
+	if ctx.Recording() {
+		ctx.RecordActivity(call.name, call.fn)
+		return zero, nil
+	}
+	futures := make([]workflow.Future, len(targets))
+	for i, target := range targets {
+		futures[i] = dispatch(ctx, target, call, opts)
+	}
+	results := make([]Res, len(targets))
+	var errs []error
+	for i, fut := range futures {
+		if err := fut.Get(ctx, &results[i]); err != nil {
+			errs = append(errs, fmt.Errorf("agent %s: %w", targets[i].AgentId(), err))
+		}
+	}
+	return results, errors.Join(errs...)
+}
+
 // Activity executes the call on the target and returns its typed result.
 // The first touch of an agent by the run brings its container up; the
 // call blocks until the result — declare resources beforehand for
@@ -100,6 +125,15 @@ func Activity[Res any](ctx pipeline.Context, target Target, call Call[Res], opts
 		ctx.RecordActivity(call.name, call.fn)
 		return zero, nil
 	}
+	fut := dispatch(ctx, target, call, opts)
+	var res Res
+	err := fut.Get(ctx, &res)
+	return res, err
+}
+
+// dispatch starts the call on one target, wrapping the future with the
+// guarantee semantics.
+func dispatch[Res any](ctx pipeline.Context, target Target, call Call[Res], opts []Option) workflow.Future {
 	o := options{timeout: 10 * time.Minute, heartbeat: 30 * time.Second}
 	for _, opt := range opts {
 		opt(&o)
@@ -118,13 +152,27 @@ func Activity[Res any](ctx pipeline.Context, target Target, call Call[Res], opts
 		}
 	}
 	fut := pipeline.DispatchOnAgent(ctx, target.AgentId(), actOpts, call.name, call.args...)
-	var res Res
-	err := fut.Get(ctx, &res)
-	if err != nil && o.guarantee == AtMostOnce {
-		var timeout *temporal.TimeoutError
-		if errors.As(err, &timeout) {
-			return res, errors.Join(pipeline.ErrUnknown, err)
-		}
+	if o.guarantee == AtMostOnce {
+		return unknownClassifier{fut}
 	}
-	return res, err
+	return fut
+}
+
+// unknownClassifier translates undeterminable at-most-once outcomes
+// (timeouts) into pipeline.ErrUnknown — never a silent re-execution.
+type unknownClassifier struct {
+	workflow.Future
+}
+
+// Get resolves the future, classifying timeout-shaped failures.
+func (u unknownClassifier) Get(ctx workflow.Context, valuePtr any) error {
+	err := u.Future.Get(ctx, valuePtr)
+	if err == nil {
+		return nil
+	}
+	var timeout *temporal.TimeoutError
+	if errors.As(err, &timeout) {
+		return errors.Join(pipeline.ErrUnknown, err)
+	}
+	return err
 }
