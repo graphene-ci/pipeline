@@ -20,7 +20,7 @@ import (
 
 // Publish writes a capability onto a machine's record through the
 // server API.
-func Publish(ctx context.Context, machineId id.MachineId, capability pipeline.Capability) error {
+func Publish(ctx context.Context, agentId id.AgentId, capability pipeline.Capability) error {
 	base := os.Getenv(wire.EnvHTTP)
 	if base == "" {
 		return fmt.Errorf("%s is not set", wire.EnvHTTP)
@@ -31,7 +31,7 @@ func Publish(ctx context.Context, machineId id.MachineId, capability pipeline.Ca
 	}
 	//nolint:gosec // the base URL is the installation's own server from the env — the only door
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut,
-		base+"/api/v1/machines/"+string(machineId)+"/capabilities/"+capability.Name, bytes.NewReader(raw))
+		base+"/api/v1/agents/"+string(agentId)+"/capabilities/"+capability.Name, bytes.NewReader(raw))
 	if err != nil {
 		return err
 	}
@@ -53,9 +53,9 @@ func Publish(ctx context.Context, machineId id.MachineId, capability pipeline.Ca
 // activity bodies inside the per-(agent × run) container, which knows
 // its machine from the environment.
 func PublishSelf(ctx context.Context, capability pipeline.Capability) error {
-	machineId, err := id.ParseMachineId(os.Getenv(wire.EnvMachineId))
+	agentId, err := id.ParseAgentId(os.Getenv(wire.EnvAgentId))
 	if err != nil {
-		return fmt.Errorf("%s: %w", wire.EnvMachineId, err)
+		return fmt.Errorf("%s: %w", wire.EnvAgentId, err)
 	}
-	return Publish(ctx, machineId, capability)
+	return Publish(ctx, agentId, capability)
 }
