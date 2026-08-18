@@ -84,7 +84,9 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) e
 			Interceptors: []interceptor.WorkerInterceptor{&cleanupInterceptor{}},
 		})
 		w.RegisterWorkflowWithOptions(wrap(pipelineId, fn), workflow.RegisterOptions{Name: string(pipelineId)})
-		registerRecorded(w, rec)
+		if err := registerRecorded(w, c, rec); err != nil {
+			return err
+		}
 		return w.Run(worker.InterruptCh())
 	case "machine":
 		machineId, err := id.ParseMachineId(os.Getenv(wire.EnvMachineId))
@@ -92,7 +94,9 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) e
 			return fmt.Errorf("%s: %w", wire.EnvMachineId, err)
 		}
 		w := worker.New(c, wire.MachineRunQueue(machineId, runId), worker.Options{})
-		registerRecorded(w, rec)
+		if err := registerRecorded(w, c, rec); err != nil {
+			return err
+		}
 		return w.Run(worker.InterruptCh())
 	default:
 		return fmt.Errorf("unknown role %q (%s)", role, wire.EnvRole)
@@ -139,14 +143,19 @@ func record[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) 
 	return rec, nil
 }
 
-// registerRecorded registers the discovered activity bodies and the
-// builtins on a worker. Every role gets all of them: an activity runs on
-// whichever queue its dispatch targets, registration is harmless
-// everywhere else.
-func registerRecorded(w worker.Worker, rec *recorder) {
+// registerRecorded registers the discovered activity bodies, the worker
+// hooks (library workflows — entity definitions), and the builtins on a
+// worker. Every role gets all of them: work runs on whichever queue its
+// dispatch targets, registration is harmless everywhere else.
+func registerRecorded(w worker.Worker, cl client.Client, rec *recorder) error {
 	for name, fn := range rec.activities {
 		w.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name})
 	}
+	var errs []error
+	for _, hook := range rec.workerHooks {
+		errs = append(errs, hook(w, cl))
+	}
 	w.RegisterActivityWithOptions(uploadFileActivity, activity.RegisterOptions{Name: uploadFileActivityName})
 	w.RegisterActivityWithOptions(uploadBytesActivity, activity.RegisterOptions{Name: uploadBytesActivityName})
+	return errors.Join(errs...)
 }
