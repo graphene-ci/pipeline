@@ -72,7 +72,13 @@ func serve(pipelineId id.PipelineId, workflowFn any, opts ...MainOption) error {
 		return fmt.Errorf("%s: %w", wire.EnvRunId, err)
 	}
 
-	c, err := client.Dial(client.Options{HostPort: os.Getenv(wire.EnvAddress)})
+	copts := client.Options{HostPort: os.Getenv(wire.EnvAddress)}
+	// The address is the server's gRPC proxy — the single door; the
+	// run-scoped token authenticates every Temporal call through it.
+	if token := os.Getenv(wire.EnvToken); token != "" {
+		copts.Credentials = client.NewAPIKeyStaticCredentials(token)
+	}
+	c, err := client.Dial(copts)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
 	}
