@@ -13,6 +13,8 @@ package pipeline
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"time"
 
 	"go.temporal.io/sdk/temporal"
@@ -81,9 +83,13 @@ func (o *ExecOptions) defaults() {
 // per-(machine × run) container hosted by the agent: an ordinary Temporal
 // activity on the machine's run queue, at-least-once, retried by policy.
 // Use for converging operations that are idempotent by construction.
+//
+// The first touch of a machine by the run brings its container up (an
+// idempotent server call precedes the activity); the returned future
+// resolves after both.
 func OnMachine(ctx workflow.Context, machineId id.MachineId, opts ExecOptions, fn any, args ...any) workflow.Future {
 	opts.defaults()
-	actx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+	return dispatchOnMachine(ctx, machineId, workflow.ActivityOptions{
 		TaskQueue:           wire.MachineRunQueue(machineId, RunId(ctx)),
 		StartToCloseTimeout: opts.Timeout,
 		HeartbeatTimeout:    opts.HeartbeatTimeout,
@@ -92,8 +98,36 @@ func OnMachine(ctx workflow.Context, machineId id.MachineId, opts ExecOptions, f
 			BackoffCoefficient: 2,
 			MaximumInterval:    time.Minute,
 		},
+	}, fn, args)
+}
+
+// dispatchOnMachine ensures the (machine × run) container and then runs
+// the machine activity, exposed as one future so independent machines
+// converge in parallel.
+func dispatchOnMachine(ctx workflow.Context, machineId id.MachineId, actOpts workflow.ActivityOptions, fn any, args []any) workflow.Future {
+	image := workerImage(ctx)
+	fut, set := workflow.NewFuture(ctx)
+	workflow.Go(ctx, func(gctx workflow.Context) {
+		req := wire.EnsureContainerRequest{MachineId: machineId, RunId: RunId(gctx), Image: image}
+		if err := workflow.ExecuteActivity(serverCtx(gctx), wire.EnsureContainerActivity, req).Get(gctx, nil); err != nil {
+			set.SetError(fmt.Errorf("ensure machine container: %w", err))
+			return
+		}
+		set.Chain(workflow.ExecuteActivity(workflow.WithActivityOptions(gctx, actOpts), fn, args...))
 	})
-	return workflow.ExecuteActivity(actx, fn, args...)
+	return fut
+}
+
+// workerImage reads the run's own image ref from the environment through
+// a side effect: recorded in history once, stable across replays.
+func workerImage(ctx workflow.Context) string {
+	var image string
+	if err := workflow.SideEffect(ctx, func(workflow.Context) any {
+		return os.Getenv(wire.EnvImage)
+	}).Get(&image); err != nil {
+		return ""
+	}
+	return image
 }
 
 // ErrUnknown reports that a one-shot action was dispatched but its outcome
@@ -108,13 +142,12 @@ var ErrUnknown = errors.New("action outcome unknown")
 // a performance test, a migration; use OnMachine for converging work.
 func Action(ctx workflow.Context, machineId id.MachineId, opts ExecOptions, fn any, args ...any) workflow.Future {
 	opts.defaults()
-	actx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+	return unknownClassifier{dispatchOnMachine(ctx, machineId, workflow.ActivityOptions{
 		TaskQueue:           wire.MachineRunQueue(machineId, RunId(ctx)),
 		StartToCloseTimeout: opts.Timeout,
 		HeartbeatTimeout:    opts.HeartbeatTimeout,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
-	})
-	return unknownClassifier{workflow.ExecuteActivity(actx, fn, args...)}
+	}, fn, args)}
 }
 
 // unknownClassifier wraps an at-most-once activity future, translating

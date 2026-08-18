@@ -41,7 +41,21 @@ const (
 	// AgentUserDataActivity returns the agent install script for a fresh
 	// machine's user-data (the same bytes the ssh install runs).
 	AgentUserDataActivity = "server.machine.user-data"
+	// EnsureContainerActivity brings the per-(machine × run) container up
+	// on the machine's agent: the first touch of a machine by a run pays
+	// it, later touches are no-ops. Idempotent.
+	EnsureContainerActivity = "server.container.ensure"
 )
+
+// EnsureContainerRequest asks the server to bring the worker container
+// of (machine × run) up on the machine's agent.
+type EnsureContainerRequest struct {
+	MachineId id.MachineId `json:"machineId"`
+	RunId     id.RunId     `json:"runId"`
+	// Image is the run's own worker image: the version of the run is the
+	// version of every container it touches.
+	Image string `json:"image"`
+}
 
 // Environment variable names read by pipeline.Main to learn its role and
 // wiring; the server and the agent set them when launching worker
@@ -56,6 +70,13 @@ const (
 	// EnvMachineId is set for the machine role: the machine this
 	// container runs on.
 	EnvMachineId = "GRAPHENE_MACHINE_ID"
+	// EnvImage is the worker's own image ref — handed to agents when the
+	// run first touches a machine, so the container matches the run's
+	// version.
+	EnvImage = "GRAPHENE_IMAGE"
+	// EnvToken is the run-scoped token; the Temporal connection goes
+	// through the server's gRPC proxy, which authenticates it.
+	EnvToken = "GRAPHENE_TOKEN" //nolint:gosec // the env var NAME, not a credential
 )
 
 // Search attribute keys used across the system in addition to the ones
