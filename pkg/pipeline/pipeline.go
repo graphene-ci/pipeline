@@ -36,36 +36,6 @@ func RunId(ctx workflow.Context) id.RunId {
 	return id.RunId(workflow.GetInfo(ctx).WorkflowExecution.ID)
 }
 
-// Machine declares a machine and waits until it is ready (agent
-// connected). The owner defaults to the current run: the run's end tears
-// the machine down. Declaration goes through the server's queue; the
-// server drives the machine entity.
-func Machine(ctx workflow.Context, machineId id.MachineId, spec MachineSpec) (MachineState, error) {
-	var st MachineState
-	if err := spec.Validate(); err != nil {
-		return st, err
-	}
-	if spec.Owner == "" {
-		spec.Owner = ref.RunOwner(RunId(ctx))
-	}
-	err := workflow.ExecuteActivity(serverCtx(ctx), wire.DeclareMachineActivity, machineId, spec).Get(ctx, &st)
-	return st, err
-}
-
-// Artifact declares an artifact record about bytes the code has already
-// stored. The owner defaults to the current run.
-func Artifact(ctx workflow.Context, artifactId id.ArtifactId, spec ArtifactSpec) (ArtifactState, error) {
-	var st ArtifactState
-	if err := spec.Validate(); err != nil {
-		return st, err
-	}
-	if spec.Owner == "" {
-		spec.Owner = ref.RunOwner(RunId(ctx))
-	}
-	err := workflow.ExecuteActivity(serverCtx(ctx), wire.DeclareArtifactActivity, artifactId, spec).Get(ctx, &st)
-	return st, err
-}
-
 // Delete explicitly deletes a resource the run owns; the implicit path —
 // the run's end tearing down everything it owns — needs no call.
 func Delete(ctx workflow.Context, owner ref.OwnerRef) error {

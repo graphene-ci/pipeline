@@ -38,6 +38,24 @@ const (
 	DeclareArtifactActivity = "server.artifact.declare"
 	// DeleteResourceActivity deletes a resource by owner reference.
 	DeleteResourceActivity = "server.resource.delete"
+	// AgentUserDataActivity returns the agent install script for a fresh
+	// machine's user-data (the same bytes the ssh install runs).
+	AgentUserDataActivity = "server.machine.user-data"
+)
+
+// Environment variable names read by pipeline.Main to learn its role and
+// wiring; the server and the agent set them when launching worker
+// containers.
+const (
+	// EnvRole selects the worker role: "run" (default) or "machine".
+	EnvRole = "GRAPHENE_ROLE"
+	// EnvAddress is the Temporal frontend address handed to the worker.
+	EnvAddress = "GRAPHENE_ADDRESS"
+	// EnvRunId is the run this worker serves.
+	EnvRunId = "GRAPHENE_RUN_ID"
+	// EnvMachineId is set for the machine role: the machine this
+	// container runs on.
+	EnvMachineId = "GRAPHENE_MACHINE_ID"
 )
 
 // Search attribute keys used across the system in addition to the ones

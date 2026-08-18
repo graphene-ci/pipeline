@@ -7,10 +7,19 @@ the system (the server and the agent import them from here).
 A pipeline is an ordinary Temporal workflow. This library adds what plain
 Temporal does not have:
 
-- **resources with owned lifetimes** — `Machine` (cloud-created and
-  owned, or ssh-recognized and untouchable), `Artifact`; the owner
-  defaults to the current run, and the run's end tears down everything it
-  owns;
+- **the Resource handle** — declaring a resource returns a handle
+  immediately; outputs are reachable only through `Ready()`, so an
+  unready resource cannot be used by construction, and declaring several
+  in a row runs their creation in parallel (Temporal's Future model
+  lifted to resources);
+- **resources with owned lifetimes** — `Machine` (a LINK between a real
+  machine created by whatever the user chose and its agent; the record
+  acts only in the ssh-install case and never creates machines),
+  `Artifact`; the owner defaults to the current run, and the run's end
+  tears down everything it owns;
+- **`Main`** — the entry point of a pipeline binary (one main == one
+  pipeline): reads its role from the environment (run worker / machine
+  container) and serves the right queue;
 - **execution on machines** — a converging call (at-least-once, retried)
   and a one-shot `Action` (MaximumAttempts=1; an undeterminable outcome
   surfaces as `ErrUnknown`, never as a silent re-execution) — both are
