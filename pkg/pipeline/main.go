@@ -1,68 +1,55 @@
 package pipeline
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 
+	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/interceptor"
 	"go.temporal.io/sdk/worker"
+	"go.temporal.io/sdk/workflow"
 
 	"github.com/graphene-ci/pipeline/pkg/id"
 	"github.com/graphene-ci/pipeline/pkg/wire"
 )
 
-// Main is the entry point of a pipeline binary: one main == one pipeline.
-// It reads the role and wiring from the environment (set by the server or
-// the agent when launching this binary as a container, or by the CLI for
-// an inplace run), registers the workflow and the machine functions, and
-// serves.
+// Main is the entry point of a pipeline binary: one main == one
+// pipeline. The pipeline function is an ordinary function of Context and
+// typed Params — the params type is the source of the UI form and submit
+// validation; its workflow type on the wire is the pipeline id, never
+// the Go function name.
 //
-// Roles of the same binary:
+// The role and the wiring come from the environment (set by the server
+// or the agent when launching this binary as a container, or by the CLI
+// for an inplace run):
 //   - "run" (default) — the run worker: executes the pipeline workflow
-//     and machine-independent activities on the run's queue;
-//   - "machine" — the per-(machine × run) container hosted by the agent:
-//     executes machine functions on the machine's run queue.
+//     and run-local activities;
+//   - "machine" — the per-(agent × run) container hosted by the agent:
+//     executes the activities targeted at that agent.
 //
-// workflowFn is the pipeline: an ordinary Temporal workflow function
-// taking the typed params struct — the source of the UI form and submit
-// validation. machineFns are the named functions callable through
-// OnMachine/Action.
-func Main(pipelineId id.PipelineId, workflowFn any, opts ...MainOption) {
-	if err := serve(pipelineId, workflowFn, opts...); err != nil {
+// Before serving, every role walks the pipeline function once in a
+// recording pass to discover inline activity declarations — that is how
+// a body written next to its call site reaches the machine container
+// without a registration list. Declare activities unconditionally
+// (not behind branches on runtime values): the pass sees the zero-value
+// path.
+func Main[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) {
+	if err := serve(pipelineId, fn); err != nil {
 		fmt.Fprintln(os.Stderr, "pipeline:", err)
 		os.Exit(1)
 	}
 }
 
-// MainOption configures Main.
-type MainOption func(*mainCfg)
-
-type mainCfg struct {
-	machineFns []any
-	activities []any
-}
-
-// WithMachineFunctions registers the named functions callable on machines
-// through OnMachine/Action. They are served by the "machine" role.
-func WithMachineFunctions(fns ...any) MainOption {
-	return func(c *mainCfg) { c.machineFns = append(c.machineFns, fns...) }
-}
-
-// WithActivities registers machine-independent activities served by the
-// "run" role alongside the workflow.
-func WithActivities(fns ...any) MainOption {
-	return func(c *mainCfg) { c.activities = append(c.activities, fns...) }
-}
-
-func serve(pipelineId id.PipelineId, workflowFn any, opts ...MainOption) error {
+func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) error {
 	if err := pipelineId.Validate(); err != nil {
 		return err
 	}
-	cfg := &mainCfg{}
-	for _, o := range opts {
-		o(cfg)
+	rec, err := record(pipelineId, fn)
+	if err != nil {
+		return err
 	}
 
 	role := os.Getenv(wire.EnvRole)
@@ -96,10 +83,8 @@ func serve(pipelineId id.PipelineId, workflowFn any, opts ...MainOption) error {
 			// triggers the server's cleanup.
 			Interceptors: []interceptor.WorkerInterceptor{&cleanupInterceptor{}},
 		})
-		w.RegisterWorkflow(workflowFn)
-		for _, fn := range cfg.activities {
-			w.RegisterActivity(fn)
-		}
+		w.RegisterWorkflowWithOptions(wrap(pipelineId, fn), workflow.RegisterOptions{Name: string(pipelineId)})
+		registerRecorded(w, rec)
 		return w.Run(worker.InterruptCh())
 	case "machine":
 		machineId, err := id.ParseMachineId(os.Getenv(wire.EnvMachineId))
@@ -107,11 +92,61 @@ func serve(pipelineId id.PipelineId, workflowFn any, opts ...MainOption) error {
 			return fmt.Errorf("%s: %w", wire.EnvMachineId, err)
 		}
 		w := worker.New(c, wire.MachineRunQueue(machineId, runId), worker.Options{})
-		for _, fn := range cfg.machineFns {
-			w.RegisterActivity(fn)
-		}
+		registerRecorded(w, rec)
 		return w.Run(worker.InterruptCh())
 	default:
 		return fmt.Errorf("unknown role %q (%s)", role, wire.EnvRole)
 	}
+}
+
+// wrap adapts the pipeline function to a Temporal workflow: builds the
+// Context and translates resource failures (Ready panics) into the
+// workflow's error.
+func wrap[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) func(workflow.Context, P) (R, error) {
+	return func(wctx workflow.Context, params P) (result R, err error) {
+		defer func() {
+			if p := recover(); p != nil {
+				if rf, ok := p.(resourceFailure); ok {
+					err = rf.err
+					return
+				}
+				panic(p)
+			}
+		}()
+		return fn(Context{Context: wctx, pipelineId: pipelineId}, params)
+	}
+}
+
+// record walks the pipeline function once with a recording Context: no
+// workflow underneath, resources resolve to zero values, Activity calls
+// register their bodies instead of executing. A panic ends the walk
+// early — anything declared after it stays unregistered, so declarations
+// must not sit behind code that needs live values.
+func record[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) (rec *recorder, err error) {
+	rec = newRecorder()
+	func() {
+		defer func() {
+			// The zero-value walk may die on user logic; that is fine —
+			// everything declared up to that point is recorded.
+			_ = recover()
+		}()
+		var zero P
+		_, _ = fn(Context{pipelineId: pipelineId, rec: rec}, zero)
+	}()
+	if len(rec.errs) > 0 {
+		return nil, errors.Join(rec.errs...)
+	}
+	return rec, nil
+}
+
+// registerRecorded registers the discovered activity bodies and the
+// builtins on a worker. Every role gets all of them: an activity runs on
+// whichever queue its dispatch targets, registration is harmless
+// everywhere else.
+func registerRecorded(w worker.Worker, rec *recorder) {
+	for name, fn := range rec.activities {
+		w.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name})
+	}
+	w.RegisterActivityWithOptions(uploadFileActivity, activity.RegisterOptions{Name: uploadFileActivityName})
+	w.RegisterActivityWithOptions(uploadBytesActivity, activity.RegisterOptions{Name: uploadBytesActivityName})
 }

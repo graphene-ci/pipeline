@@ -1,19 +1,16 @@
-// Package pipeline is the library a pipeline author writes against. A
-// pipeline is an ordinary Temporal workflow; this library adds what plain
-// Temporal does not have: declaring resources with owned lifetimes,
-// running functions on machines, one-shot actions with "at most once"
-// semantics, and reference types for secrets and blobs.
+// Package pipeline is the library a pipeline author writes against. User
+// code is a mix of Resource (handles with owned lifetimes in one tree),
+// Activity (code executed on an execution site — see pkg/activity), and
+// plain control flow; everything else — registration, containers,
+// delivery — is wiring the library hides.
 //
 // The same user binary serves every execution site: the run worker
-// (managed container or inplace process) and the per-(machine × run)
-// container hosted by the agent. Dispatch is plain Temporal — a function
-// passed to the machine-execution helpers must be a named, registered
-// function, not a closure (closures do not serialize).
+// (managed container or inplace process) and the per-(agent × run)
+// container hosted by the agent on a machine.
 package pipeline
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"time"
 
@@ -25,30 +22,29 @@ import (
 	"github.com/graphene-ci/pipeline/pkg/wire"
 )
 
-// Re-exported reference types: what travels instead of values.
-type (
-	// SecretRef names a secret; the value is resolved at the point of use.
-	SecretRef = ref.SecretRef
-	// BlobRef points at bytes in external storage.
-	BlobRef = ref.BlobRef
-)
+// SecretRef re-export: what travels instead of a secret value.
+type SecretRef = ref.SecretRef
 
-// RunId derives the current run id from the workflow ID.
-func RunId(ctx workflow.Context) id.RunId {
-	return id.RunId(workflow.GetInfo(ctx).WorkflowExecution.ID)
+// BlobRef re-export: what travels instead of bytes.
+type BlobRef = ref.BlobRef
+
+// Secret builds a reference into this pipeline's secret set — the values
+// are assigned to the pipeline on the server. Only the name ever
+// travels; the value resolves inside activities at the point of use and
+// never comes back.
+func Secret(_ Context, name string) SecretRef {
+	return SecretRef{Name: id.SecretId(name)}
 }
 
-// Delete explicitly deletes a resource the run owns; the implicit path —
-// the run's end tearing down everything it owns — needs no call.
-func Delete(ctx workflow.Context, owner ref.OwnerRef) error {
-	return workflow.ExecuteActivity(serverCtx(ctx), wire.DeleteResourceActivity, owner).Get(ctx, nil)
-}
+// ErrUnknown reports that an at-most-once activity was dispatched but
+// its outcome could not be established: it may or may not have executed.
+// There is no silent retry — the caller decides by policy.
+var ErrUnknown = errors.New("outcome unknown")
 
+// serverCtx targets the server's activity queue.
 func serverCtx(ctx workflow.Context) workflow.Context {
 	return workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		TaskQueue: wire.ServerQueue,
-		// Declaration waits for readiness inside the server's activity;
-		// heartbeats distinguish "still converging" from "lost".
+		TaskQueue:           wire.ServerQueue,
 		StartToCloseTimeout: 30 * time.Minute,
 		HeartbeatTimeout:    time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -59,68 +55,36 @@ func serverCtx(ctx workflow.Context) workflow.Context {
 	})
 }
 
-// --- execution on machines ---
-//
-// NOTE: the names OnMachine/Action are PROVISIONAL — the final naming of
-// the machine-execution pair is deliberately not decided yet.
-
-// ExecOptions tune a machine-bound call.
-type ExecOptions struct {
-	// Timeout bounds a single execution (start-to-close). Zero means 10m.
-	Timeout time.Duration
-	// HeartbeatTimeout distinguishes "still running" from "died". Zero
-	// disables heartbeating.
-	HeartbeatTimeout time.Duration
-}
-
-func (o *ExecOptions) defaults() {
-	if o.Timeout == 0 {
-		o.Timeout = 10 * time.Minute
+// DispatchOnAgent runs a named activity inside the per-(agent × run)
+// container: the first touch of an agent by the run brings the container
+// up (an idempotent server call precedes the activity), exposed as one
+// future so independent agents converge in parallel. Library-author
+// surface — user code goes through pkg/activity.
+func DispatchOnAgent(ctx Context, agentId id.MachineId, actOpts workflow.ActivityOptions, name string, args ...any) workflow.Future {
+	if ctx.Recording() {
+		// Callers check Recording() and register instead of dispatching;
+		// a nil future here would be a caller bug.
+		return nil
 	}
-}
-
-// OnMachine executes a registered function on the machine, inside the
-// per-(machine × run) container hosted by the agent: an ordinary Temporal
-// activity on the machine's run queue, at-least-once, retried by policy.
-// Use for converging operations that are idempotent by construction.
-//
-// The first touch of a machine by the run brings its container up (an
-// idempotent server call precedes the activity); the returned future
-// resolves after both.
-func OnMachine(ctx workflow.Context, machineId id.MachineId, opts ExecOptions, fn any, args ...any) workflow.Future {
-	opts.defaults()
-	return dispatchOnMachine(ctx, machineId, workflow.ActivityOptions{
-		TaskQueue:           wire.MachineRunQueue(machineId, RunId(ctx)),
-		StartToCloseTimeout: opts.Timeout,
-		HeartbeatTimeout:    opts.HeartbeatTimeout,
-		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    time.Second,
-			BackoffCoefficient: 2,
-			MaximumInterval:    time.Minute,
-		},
-	}, fn, args)
-}
-
-// dispatchOnMachine ensures the (machine × run) container and then runs
-// the machine activity, exposed as one future so independent machines
-// converge in parallel.
-func dispatchOnMachine(ctx workflow.Context, machineId id.MachineId, actOpts workflow.ActivityOptions, fn any, args []any) workflow.Future {
+	if actOpts.TaskQueue == "" {
+		actOpts.TaskQueue = wire.MachineRunQueue(agentId, ctx.RunId())
+	}
 	image := workerImage(ctx)
 	fut, set := workflow.NewFuture(ctx)
 	workflow.Go(ctx, func(gctx workflow.Context) {
-		req := wire.EnsureContainerRequest{MachineId: machineId, RunId: RunId(gctx), Image: image}
+		req := wire.EnsureContainerRequest{MachineId: agentId, RunId: ctx.RunId(), Image: image}
 		if err := workflow.ExecuteActivity(serverCtx(gctx), wire.EnsureContainerActivity, req).Get(gctx, nil); err != nil {
-			set.SetError(fmt.Errorf("ensure machine container: %w", err))
+			set.SetError(err)
 			return
 		}
-		set.Chain(workflow.ExecuteActivity(workflow.WithActivityOptions(gctx, actOpts), fn, args...))
+		set.Chain(workflow.ExecuteActivity(workflow.WithActivityOptions(gctx, actOpts), name, args...))
 	})
 	return fut
 }
 
-// workerImage reads the run's own image ref from the environment through
-// a side effect: recorded in history once, stable across replays.
-func workerImage(ctx workflow.Context) string {
+// workerImage reads the run's own image ref through a side effect:
+// recorded in history once, stable across replays.
+func workerImage(ctx Context) string {
 	var image string
 	if err := workflow.SideEffect(ctx, func(workflow.Context) any {
 		return os.Getenv(wire.EnvImage)
@@ -128,44 +92,4 @@ func workerImage(ctx workflow.Context) string {
 		return ""
 	}
 	return image
-}
-
-// ErrUnknown reports that a one-shot action was dispatched but its outcome
-// could not be established: it may or may not have executed. There is no
-// silent retry — the caller decides by policy (retry under a NEW action,
-// ask a human, fail the run).
-var ErrUnknown = errors.New("action outcome unknown")
-
-// Action executes a registered function on the machine AT MOST ONCE:
-// MaximumAttempts=1, no retries. A timeout or worker loss surfaces as
-// ErrUnknown (wrapped), never as a re-execution. Use for one-shot work —
-// a performance test, a migration; use OnMachine for converging work.
-func Action(ctx workflow.Context, machineId id.MachineId, opts ExecOptions, fn any, args ...any) workflow.Future {
-	opts.defaults()
-	return unknownClassifier{dispatchOnMachine(ctx, machineId, workflow.ActivityOptions{
-		TaskQueue:           wire.MachineRunQueue(machineId, RunId(ctx)),
-		StartToCloseTimeout: opts.Timeout,
-		HeartbeatTimeout:    opts.HeartbeatTimeout,
-		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
-	}, fn, args)}
-}
-
-// unknownClassifier wraps an at-most-once activity future, translating
-// undeterminable outcomes (timeouts) into ErrUnknown.
-type unknownClassifier struct {
-	workflow.Future
-}
-
-// Get resolves the underlying future, classifying timeout-shaped failures
-// as ErrUnknown.
-func (u unknownClassifier) Get(ctx workflow.Context, valuePtr any) error {
-	err := u.Future.Get(ctx, valuePtr)
-	if err == nil {
-		return nil
-	}
-	var timeout *temporal.TimeoutError
-	if errors.As(err, &timeout) {
-		return errors.Join(ErrUnknown, err)
-	}
-	return err
 }

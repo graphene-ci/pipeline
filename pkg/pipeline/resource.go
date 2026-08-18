@@ -1,85 +1,120 @@
 package pipeline
 
 import (
+	"fmt"
+	"time"
+
 	"go.temporal.io/sdk/workflow"
 
-	"github.com/graphene-ci/pipeline/pkg/id"
 	"github.com/graphene-ci/pipeline/pkg/ref"
-	"github.com/graphene-ci/pipeline/pkg/wire"
 )
 
 // Resource is the handle primitive: declaring a resource returns one
 // immediately, without blocking. Outputs are reachable only through
 // Ready — the first read blocks until the resource converges, so an
-// unready resource cannot be used by construction. This is Temporal's own
-// Future model lifted to the resource level; declaring several resources
-// in a row runs their creation in parallel with no explicit concurrency.
+// unready resource cannot be used by construction. Libraries bring their
+// own constructors (k8s client, docker, agents); they all return this
+// handle, and everything systemic — the ownership tree, cascade,
+// visibility in CLI/UI — is a property of the handle, not of the verb.
 type Resource[Out any] struct {
-	fut workflow.Future
+	self ref.OwnerRef
+	fut  workflow.Future
+	rec  bool
 }
 
-// Ready blocks until the resource is ready and returns its outputs.
-// Subsequent calls return the same outcome.
-func (r Resource[Out]) Ready(ctx workflow.Context) (Out, error) {
+// Handle is the untyped view of any resource — what tree options accept.
+type Handle interface {
+	// ResourceRef addresses the resource record as "kind/id".
+	ResourceRef() ref.OwnerRef
+}
+
+// ResourceRef addresses this resource in the ownership tree.
+func (r Resource[Out]) ResourceRef() ref.OwnerRef { return r.self }
+
+// Ready blocks until the resource is ready and returns its outputs;
+// subsequent calls return the same outcome. A resource that failed to
+// converge fails the run here (Main translates it into the workflow's
+// error) — use TryReady to handle the error in code instead.
+func (r Resource[Out]) Ready(ctx Context) Out {
+	out, err := r.TryReady(ctx)
+	if err != nil {
+		panic(resourceFailure{err: fmt.Errorf("%s: %w", r.self, err)})
+	}
+	return out
+}
+
+// TryReady is Ready with the error in hand.
+func (r Resource[Out]) TryReady(ctx Context) (Out, error) {
 	var out Out
+	if r.rec || r.fut == nil {
+		return out, nil
+	}
 	err := r.fut.Get(ctx, &out)
 	return out, err
 }
 
-// failed builds a handle already resolved to an error (spec validation).
-func failed[Out any](ctx workflow.Context, err error) Resource[Out] {
-	fut, set := workflow.NewFuture(ctx)
-	set.SetError(err)
-	return Resource[Out]{fut: fut}
+// resourceFailure travels from Ready to Main's wrapper, which returns it
+// as the workflow's error — user code stays free of plumbing.
+type resourceFailure struct{ err error }
+
+// NewResource wraps a future into a handle — the constructor RESOURCE
+// LIBRARIES use; user code receives handles, never builds them.
+func NewResource[Out any](ctx Context, self ref.OwnerRef, fut workflow.Future) Resource[Out] {
+	return Resource[Out]{self: self, fut: fut, rec: ctx.Recording()}
 }
 
-// MachineHandle is the machine resource handle; Ready means the agent of
-// the machine has connected.
-type MachineHandle = Resource[MachineState]
-
-// Machine declares a machine record and returns its handle without
-// blocking. The record is a link between a real machine — created by
-// whatever the user chose — and its agent; Ready when the agent connects.
-// The owner defaults to the current run.
-func Machine(ctx workflow.Context, machineId id.MachineId, spec MachineSpec) MachineHandle {
-	if err := spec.Validate(); err != nil {
-		return failed[MachineState](ctx, err)
-	}
-	if spec.Owner == "" {
-		spec.Owner = ref.RunOwner(RunId(ctx))
-	}
-	return MachineHandle{fut: workflow.ExecuteActivity(serverCtx(ctx), wire.DeclareMachineActivity, machineId, spec)}
+// ResourceOptions is the resolved option set of a declaration.
+type ResourceOptions struct {
+	// Parent owns the new resource; zero means the run.
+	Parent ref.OwnerRef
+	// Children are existing resources the new one claims: the declaring
+	// code is their current owner and GIVES them — ownership is given
+	// away, never taken.
+	Children []ref.OwnerRef
 }
 
-// MachineViaSSH declares a machine record that first installs the agent
-// over ssh — the only case where the record acts on the machine.
-func MachineViaSSH(ctx workflow.Context, machineId id.MachineId, install SSHInstall) MachineHandle {
-	return Machine(ctx, machineId, MachineSpec{SSH: &install})
+// ResourceOption tunes a resource declaration.
+type ResourceOption func(*ResourceOptions)
+
+// Parent makes the new resource die with an existing one instead of the
+// run; the cascade follows the tree.
+func Parent(h Handle) ResourceOption {
+	return func(o *ResourceOptions) { o.Parent = h.ResourceRef() }
 }
 
-// AgentUserData returns the user-data script that installs the agent on a
-// fresh VM and points it at this installation under the given machine id.
-// Feed it to whatever creates the machine (a crossplane resource, a cloud
-// console): one script for both paths — ssh install runs the same bytes —
-// because two scripts would drift.
-func AgentUserData(ctx workflow.Context, machineId id.MachineId) (string, error) {
-	var script string
-	err := workflow.ExecuteActivity(serverCtx(ctx), wire.AgentUserDataActivity, machineId).Get(ctx, &script)
-	return script, err
+// Children hands existing resources to the new one — the link declared
+// from whichever side exists later.
+func Children(hs ...Handle) ResourceOption {
+	return func(o *ResourceOptions) {
+		for _, h := range hs {
+			o.Children = append(o.Children, h.ResourceRef())
+		}
+	}
 }
 
-// ArtifactHandle is the artifact resource handle.
-type ArtifactHandle = Resource[ArtifactState]
+// BuildResourceOptions resolves options against the run as the default
+// owner — for library constructors.
+func BuildResourceOptions(ctx Context, opts []ResourceOption) ResourceOptions {
+	o := ResourceOptions{}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	if o.Parent == "" && !ctx.Recording() {
+		o.Parent = ref.RunOwner(ctx.RunId())
+	}
+	return o
+}
 
-// Artifact declares an artifact record about bytes the code has already
-// stored and returns its handle without blocking. The owner defaults to
-// the current run.
-func Artifact(ctx workflow.Context, artifactId id.ArtifactId, spec ArtifactSpec) ArtifactHandle {
-	if err := spec.Validate(); err != nil {
-		return failed[ArtifactState](ctx, err)
-	}
-	if spec.Owner == "" {
-		spec.Owner = ref.RunOwner(RunId(ctx))
-	}
-	return ArtifactHandle{fut: workflow.ExecuteActivity(serverCtx(ctx), wire.DeclareArtifactActivity, artifactId, spec)}
+// TransferOption tunes a transfer of ownership.
+type TransferOption func(*transferOptions)
+
+type transferOptions struct {
+	keep time.Duration
+}
+
+// KeepFor bounds the stay under the new owner: the owner deletes the
+// subtree when the TTL expires. Without it the resources live until an
+// explicit delete.
+func KeepFor(d time.Duration) TransferOption {
+	return func(o *transferOptions) { o.keep = d }
 }
