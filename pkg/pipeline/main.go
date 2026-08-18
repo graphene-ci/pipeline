@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,7 +9,9 @@ import (
 
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/converter"
 	"go.temporal.io/sdk/interceptor"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
 
@@ -157,5 +160,18 @@ func registerRecorded(w worker.Worker, cl client.Client, rec *recorder) error {
 	}
 	w.RegisterActivityWithOptions(uploadFileActivity, activity.RegisterOptions{Name: uploadFileActivityName})
 	w.RegisterActivityWithOptions(uploadBytesActivity, activity.RegisterOptions{Name: uploadBytesActivityName})
+	// The safety net for the discovery pass: an activity that was NOT
+	// discovered fails loudly and immediately instead of retrying into
+	// silence — the error names the fix.
+	w.RegisterDynamicActivity(undiscoveredActivity, activity.DynamicRegisterOptions{})
 	return errors.Join(errs...)
+}
+
+// undiscoveredActivity answers for any activity name the discovery pass
+// did not see.
+func undiscoveredActivity(ctx context.Context, _ converter.EncodedValues) (any, error) {
+	name := activity.GetInfo(ctx).ActivityType.Name
+	return nil, temporal.NewNonRetryableApplicationError(
+		fmt.Sprintf("activity %q was not discovered by the registration pass: keep its declaration reachable on the optimistic zero path (no branches on live values before it)", name),
+		"undiscovered-activity", nil)
 }

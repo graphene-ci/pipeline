@@ -44,12 +44,18 @@ func (r Resource[Out]) Ready(ctx Context) Out {
 	return out
 }
 
-// TryReady is Ready with the error in hand.
+// TryReady is Ready with the error in hand. During the recording pass
+// it returns an OPTIMISTIC zero (bools true), so readiness guards do
+// not end the discovery walk.
 func (r Resource[Out]) TryReady(ctx Context) (Out, error) {
-	var out Out
 	if r.rec || r.fut == nil {
+		if ctx.Recording() {
+			return optimisticZero[Out](), nil
+		}
+		var out Out
 		return out, nil
 	}
+	var out Out
 	err := r.fut.Get(ctx, &out)
 	return out, err
 }
@@ -78,12 +84,17 @@ func (r Attached[Out]) Ready(ctx Context) Out {
 	return out
 }
 
-// TryReady is Ready with the error in hand.
+// TryReady is Ready with the error in hand; optimistic zero during the
+// recording pass, like every handle.
 func (r Attached[Out]) TryReady(ctx Context) (Out, error) {
-	var out Out
 	if r.rec || r.fut == nil {
+		if ctx.Recording() {
+			return optimisticZero[Out](), nil
+		}
+		var out Out
 		return out, nil
 	}
+	var out Out
 	err := r.fut.Get(ctx, &out)
 	return out, err
 }
