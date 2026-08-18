@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"strings"
 	"time"
 
 	"go.temporal.io/sdk/interceptor"
@@ -51,5 +52,5 @@ func cleanup(ctx workflow.Context) {
 	})
 	// A cleanup failure must not mask the run's own result; the activity
 	// retries hard before giving up, and the error is visible in history.
-	_ = workflow.ExecuteActivity(actx, wire.RunCleanupActivity, id.RunId(workflow.GetInfo(ctx).WorkflowExecution.ID)).Get(dctx, nil)
+	_ = workflow.ExecuteActivity(actx, wire.RunCleanupActivity, id.RunId(strings.TrimPrefix(workflow.GetInfo(ctx).WorkflowExecution.ID, "run/"))).Get(dctx, nil)
 }
