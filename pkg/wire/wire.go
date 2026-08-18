@@ -81,6 +81,9 @@ const (
 	// EnvToken is the run-scoped token; the Temporal connection goes
 	// through the server's gRPC proxy, which authenticates it.
 	EnvToken = "GRAPHENE_TOKEN" //nolint:gosec // the env var NAME, not a credential
+	// EnvInsecure ("1"/"true") disables TLS towards the server — dev
+	// contours only.
+	EnvInsecure = "GRAPHENE_INSECURE"
 )
 
 // Search attribute keys used across the system in addition to the ones

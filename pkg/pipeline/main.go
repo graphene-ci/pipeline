@@ -3,6 +3,7 @@ package pipeline
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/interceptor"
@@ -78,6 +79,9 @@ func serve(pipelineId id.PipelineId, workflowFn any, opts ...MainOption) error {
 	// run-scoped token authenticates every Temporal call through it.
 	if token := os.Getenv(wire.EnvToken); token != "" {
 		copts.Credentials = client.NewAPIKeyStaticCredentials(token)
+	}
+	if insecure, _ := strconv.ParseBool(os.Getenv(wire.EnvInsecure)); insecure {
+		copts.ConnectionOptions.TLSDisabled = true
 	}
 	c, err := client.Dial(copts)
 	if err != nil {
