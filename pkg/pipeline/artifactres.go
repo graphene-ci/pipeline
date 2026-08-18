@@ -64,6 +64,18 @@ func NewArtifact(ctx Context, name string, src artifact.Source, opts ...Resource
 	return res
 }
 
+// AttachArtifact recognizes an artifact made OUTSIDE this run — by
+// another pipeline, an earlier run, a person: a missing record is an
+// error, never a creation, and no ownership is taken. Ready returns the
+// verified state with the blob ref to fetch.
+func AttachArtifact(ctx Context, name string) Attached[ArtifactState] {
+	if ctx.Recording() {
+		return NewAttached[ArtifactState](ctx, nil)
+	}
+	fut := workflow.ExecuteActivity(serverCtx(ctx), wire.AttachArtifactActivity, id.ArtifactId(name))
+	return NewAttached[ArtifactState](ctx, fut)
+}
+
 // Builtin blob activities: registered by Main on every role — upload
 // happens on whichever site holds the bytes.
 const (

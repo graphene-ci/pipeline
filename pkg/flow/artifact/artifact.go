@@ -61,6 +61,7 @@ func initArtifact(ctx workflow.Context, spec pipeline.ArtifactSpec) (State, erro
 		return st, errors.New("blob not found at location")
 	}
 	st.Verified = true
+	st.ArtifactState.Blob = spec.Blob
 	st.Blob = &spec.Blob
 	return st, nil
 }
