@@ -89,11 +89,11 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) e
 		}
 		return w.Run(worker.InterruptCh())
 	case "machine":
-		machineId, err := id.ParseMachineId(os.Getenv(wire.EnvMachineId))
+		agentId, err := id.ParseAgentId(os.Getenv(wire.EnvAgentId))
 		if err != nil {
-			return fmt.Errorf("%s: %w", wire.EnvMachineId, err)
+			return fmt.Errorf("%s: %w", wire.EnvAgentId, err)
 		}
-		w := worker.New(c, wire.MachineRunQueue(machineId, runId), worker.Options{})
+		w := worker.New(c, wire.AgentRunQueue(agentId, runId), worker.Options{})
 		if err := registerRecorded(w, c, rec); err != nil {
 			return err
 		}

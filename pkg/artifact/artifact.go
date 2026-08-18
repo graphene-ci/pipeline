@@ -10,7 +10,7 @@ import (
 // Agent is the slice of an agent handle a source needs — satisfied by
 // pipeline.AgentHandle.
 type Agent interface {
-	AgentId() id.MachineId
+	AgentId() id.AgentId
 }
 
 // Source says where the artifact's bytes are.
@@ -25,7 +25,7 @@ type Source struct {
 
 // AgentFileSource locates a file on a machine.
 type AgentFileSource struct {
-	AgentId id.MachineId
+	AgentId id.AgentId
 	Path    string
 }
 

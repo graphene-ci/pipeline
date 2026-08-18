@@ -16,12 +16,12 @@ import (
 // entity workflows and their activities run here.
 const ServerQueue = "graphene-server"
 
-// MachineRunQueue names the task queue served by the user-code container
-// hosted on a machine for one run. The container is scoped to
+// AgentRunQueue names the task queue served by the user-code container
+// hosted by the agent for one run. The container is scoped to
 // (machine × run) and owned by the run: its version is the run's image
 // version, and the run's end tears it down.
-func MachineRunQueue(m id.MachineId, r id.RunId) string {
-	return "machine/" + string(m) + "/run/" + string(r)
+func AgentRunQueue(m id.AgentId, r id.RunId) string {
+	return "agent/" + string(m) + "/run/" + string(r)
 }
 
 // RunQueue names the task queue of a run's main worker (managed container
@@ -33,9 +33,9 @@ func RunQueue(r id.RunId) string {
 // Server activity names: the contract between the pipeline library and
 // the server worker (the server implements these on ServerQueue).
 const (
-	// DeclareMachineActivity declares a machine record and waits for
+	// DeclareAgentActivity declares a machine record and waits for
 	// readiness (agent connected), heartbeating while converging.
-	DeclareMachineActivity = "server.machine.declare"
+	DeclareAgentActivity = "server.agent.declare"
 	// DeclareArtifactActivity declares an artifact record about stored
 	// bytes and verifies them.
 	DeclareArtifactActivity = "server.artifact.declare"
@@ -43,7 +43,7 @@ const (
 	DeleteResourceActivity = "server.resource.delete"
 	// AgentUserDataActivity returns the agent install script for a fresh
 	// machine's user-data (the same bytes the ssh install runs).
-	AgentUserDataActivity = "server.machine.user-data"
+	AgentUserDataActivity = "server.agent.user-data"
 	// EnsureContainerActivity brings the per-(machine × run) container up
 	// on the machine's agent: the first touch of a machine by a run pays
 	// it, later touches are no-ops. Idempotent.
@@ -56,10 +56,10 @@ const (
 	// a new owner. Ownership is given away, never taken: the caller must
 	// be the current owner's side.
 	TransferResourceActivity = "server.resource.transfer"
-	// AttachMachineActivity waits for an EXISTING machine record to be
+	// AttachAgentActivity waits for an EXISTING machine record to be
 	// ready and returns its state — recognition, never creation: a
 	// missing record is an error.
-	AttachMachineActivity = "server.machine.attach"
+	AttachAgentActivity = "server.agent.attach"
 	// AttachArtifactActivity is the same recognition for artifacts.
 	AttachArtifactActivity = "server.artifact.attach"
 	// SelectAgentsActivity lists the machine ids matching a selector
@@ -103,7 +103,7 @@ func StandOwner(p id.PipelineId) ref.OwnerRef {
 // EnsureContainerRequest asks the server to bring the worker container
 // of (machine × run) up on the machine's agent.
 type EnsureContainerRequest struct {
-	MachineId id.MachineId `json:"machineId"`
+	AgentId id.AgentId `json:"agentId"`
 	RunId     id.RunId     `json:"runId"`
 	// Image is the run's own worker image: the version of the run is the
 	// version of every container it touches.
@@ -120,9 +120,9 @@ const (
 	EnvAddress = "GRAPHENE_ADDRESS"
 	// EnvRunId is the run this worker serves.
 	EnvRunId = "GRAPHENE_RUN_ID"
-	// EnvMachineId is set for the machine role: the machine this
+	// EnvAgentId is set for the machine role: the machine this
 	// container runs on.
-	EnvMachineId = "GRAPHENE_MACHINE_ID"
+	EnvAgentId = "GRAPHENE_AGENT_ID"
 	// EnvImage is the worker's own image ref — handed to agents when the
 	// run first touches a machine, so the container matches the run's
 	// version.

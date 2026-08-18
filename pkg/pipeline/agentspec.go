@@ -40,12 +40,12 @@ func (s SSHInstall) Validate() error {
 	return nil
 }
 
-// MachineSpec is the desired state of a machine record. The record is a
+// AgentSpec is the desired state of a machine record. The record is a
 // LINK between a real machine and its agent: it never creates machines.
 // With SSH set, the system installs the agent over ssh first; otherwise
 // the record simply waits for the agent to connect (a fresh VM brings the
 // agent through its user-data — see AgentUserData).
-type MachineSpec struct {
+type AgentSpec struct {
 	SSH *SSHInstall `json:"ssh,omitempty"`
 
 	Owner  ref.OwnerRef      `json:"owner,omitempty"`
@@ -56,7 +56,7 @@ type MachineSpec struct {
 }
 
 // Validate checks the spec structurally (deterministic).
-func (s MachineSpec) Validate() error {
+func (s AgentSpec) Validate() error {
 	if s.SSH != nil {
 		if err := s.SSH.Validate(); err != nil {
 			return err
@@ -68,10 +68,10 @@ func (s MachineSpec) Validate() error {
 	return nil
 }
 
-// MachineState is the observed state of a machine record: what the agent
+// AgentState is the observed state of a machine record: what the agent
 // reported about the real machine behind it, plus what the machine CAN —
 // its published capabilities.
-type MachineState struct {
+type AgentState struct {
 	Addresses      []string `json:"addresses,omitempty"`
 	AgentConnected bool     `json:"agentConnected"`
 	// FactsDigest references the machine facts blob; the facts themselves

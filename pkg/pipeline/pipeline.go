@@ -60,19 +60,19 @@ func serverCtx(ctx workflow.Context) workflow.Context {
 // up (an idempotent server call precedes the activity), exposed as one
 // future so independent agents converge in parallel. Library-author
 // surface — user code goes through pkg/activity.
-func DispatchOnAgent(ctx Context, agentId id.MachineId, actOpts workflow.ActivityOptions, name string, args ...any) workflow.Future {
+func DispatchOnAgent(ctx Context, agentId id.AgentId, actOpts workflow.ActivityOptions, name string, args ...any) workflow.Future {
 	if ctx.Recording() {
 		// Callers check Recording() and register instead of dispatching;
 		// a nil future here would be a caller bug.
 		return nil
 	}
 	if actOpts.TaskQueue == "" {
-		actOpts.TaskQueue = wire.MachineRunQueue(agentId, ctx.RunId())
+		actOpts.TaskQueue = wire.AgentRunQueue(agentId, ctx.RunId())
 	}
 	image := workerImage(ctx)
 	fut, set := workflow.NewFuture(ctx)
 	workflow.Go(ctx, func(gctx workflow.Context) {
-		req := wire.EnsureContainerRequest{MachineId: agentId, RunId: ctx.RunId(), Image: image}
+		req := wire.EnsureContainerRequest{AgentId: agentId, RunId: ctx.RunId(), Image: image}
 		if err := workflow.ExecuteActivity(serverCtx(gctx), wire.EnsureContainerActivity, req).Get(gctx, nil); err != nil {
 			set.SetError(err)
 			return

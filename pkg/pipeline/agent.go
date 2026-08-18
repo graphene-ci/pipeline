@@ -14,11 +14,6 @@ import (
 // whatever creates or already runs the machine (cloud user-data, ssh
 // install), and readiness means the agent has connected.
 //
-// NOTE: on the wire the record is still the "machine" kind served by the
-// server; the rename to agent is a pending server-side refactor.
-
-// AgentState is what the connected agent reported.
-type AgentState = MachineState
 
 // Agent is the target surface of an agent — OURS or FOREIGN: consumers
 // (activities, artifact sources, libraries) take this interface and
@@ -26,7 +21,7 @@ type AgentState = MachineState
 // attached agent has no ResourceRef and cannot enter the ownership
 // tree.
 type Agent interface {
-	AgentId() id.MachineId
+	AgentId() id.AgentId
 }
 
 // AgentHandle is the agent resource handle; Ready when the agent of the
@@ -34,14 +29,14 @@ type Agent interface {
 type AgentHandle struct {
 	Resource[AgentState]
 
-	agentId  id.MachineId
+	agentId  id.AgentId
 	userData workflow.Future
 	ctx      Context
 }
 
 // AgentId names the agent's record — the routing key of its activity
 // queue.
-func (a AgentHandle) AgentId() id.MachineId { return a.agentId }
+func (a AgentHandle) AgentId() id.AgentId { return a.agentId }
 
 // CloudInit returns the install script for the machine's user-data: the
 // agent proves itself with what the machine IS — the identity its
@@ -62,19 +57,19 @@ func (a AgentHandle) CloudInit() string {
 // owned. Everything a consumer can do with an agent works on it.
 type AttachedAgent struct {
 	Attached[AgentState]
-	agentId id.MachineId
+	agentId id.AgentId
 }
 
 // AgentId names the agent's record — the routing key of its activity
 // queue.
-func (a AttachedAgent) AgentId() id.MachineId { return a.agentId }
+func (a AttachedAgent) AgentId() id.AgentId { return a.agentId }
 
 // AttachAgent recognizes an EXISTING agent created outside this run: a
 // missing record is an error, never a creation. Ready waits for the
 // agent AND for the Need requirements — the refusal comes before work
 // is dispatched. Only Need options apply.
 func AttachAgent(ctx Context, name string, opts ...ResourceOption) AttachedAgent {
-	agentId := id.MachineId(name)
+	agentId := id.AgentId(name)
 	h := AttachedAgent{agentId: agentId}
 	if ctx.Recording() {
 		h.Attached = NewAttached[AgentState](ctx, nil)
@@ -84,7 +79,7 @@ func AttachAgent(ctx Context, name string, opts ...ResourceOption) AttachedAgent
 	for _, opt := range opts {
 		opt(&o)
 	}
-	fut := workflow.ExecuteActivity(serverCtx(ctx), wire.AttachMachineActivity, agentId, o.Needs)
+	fut := workflow.ExecuteActivity(serverCtx(ctx), wire.AttachAgentActivity, agentId, o.Needs)
 	h.Attached = NewAttached[AgentState](ctx, fut)
 	return h
 }
@@ -101,13 +96,13 @@ func SelectAgents(ctx Context, opts ...ResourceOption) ([]Agent, error) {
 		opt(&o)
 	}
 	sel := wire.AgentSelector{Labels: o.Labels, Needs: o.Needs}
-	var ids []id.MachineId
+	var ids []id.AgentId
 	if err := workflow.ExecuteActivity(serverCtx(ctx), wire.SelectAgentsActivity, sel).Get(ctx, &ids); err != nil {
 		return nil, err
 	}
 	out := make([]Agent, 0, len(ids))
-	for _, machineId := range ids {
-		out = append(out, AttachAgent(ctx, string(machineId)))
+	for _, agentId := range ids {
+		out = append(out, AttachAgent(ctx, string(agentId)))
 	}
 	return out, nil
 }
@@ -127,17 +122,17 @@ func PublishCapability(ctx Context, agent Agent, capability Capability) error {
 // crossplane resource with CloudInit in user-data, a person, an ssh
 // install; Ready blocks until the agent connects.
 func NewAgent(ctx Context, name string, opts ...ResourceOption) AgentHandle {
-	agentId := id.MachineId(name)
-	self := ref.OwnerRef("machine/" + name)
+	agentId := id.AgentId(name)
+	self := ref.OwnerRef("agent/" + name)
 	h := AgentHandle{agentId: agentId, ctx: ctx}
 	if ctx.Recording() {
 		h.Resource = NewResource[AgentState](ctx, self, nil)
 		return h
 	}
 	o := BuildResourceOptions(ctx, opts)
-	spec := MachineSpec{Owner: o.Parent, Labels: o.Labels, Needs: o.Needs}
+	spec := AgentSpec{Owner: o.Parent, Labels: o.Labels, Needs: o.Needs}
 	sctx := serverCtx(ctx)
-	h.Resource = NewResource[AgentState](ctx, self, workflow.ExecuteActivity(sctx, wire.DeclareMachineActivity, agentId, spec))
+	h.Resource = NewResource[AgentState](ctx, self, workflow.ExecuteActivity(sctx, wire.DeclareAgentActivity, agentId, spec))
 	h.userData = workflow.ExecuteActivity(sctx, wire.AgentUserDataActivity, agentId)
 	adoptChildren(ctx, self, o.Children)
 	return h
@@ -147,17 +142,17 @@ func NewAgent(ctx Context, name string, opts ...ResourceOption) AgentHandle {
 // system installs the agent over ssh — the only case where it touches
 // the machine.
 func NewAgentViaSSH(ctx Context, name string, install SSHInstall, opts ...ResourceOption) AgentHandle {
-	agentId := id.MachineId(name)
-	self := ref.OwnerRef("machine/" + name)
+	agentId := id.AgentId(name)
+	self := ref.OwnerRef("agent/" + name)
 	h := AgentHandle{agentId: agentId, ctx: ctx}
 	if ctx.Recording() {
 		h.Resource = NewResource[AgentState](ctx, self, nil)
 		return h
 	}
 	o := BuildResourceOptions(ctx, opts)
-	spec := MachineSpec{SSH: &install, Owner: o.Parent, Labels: o.Labels, Needs: o.Needs}
+	spec := AgentSpec{SSH: &install, Owner: o.Parent, Labels: o.Labels, Needs: o.Needs}
 	sctx := serverCtx(ctx)
-	h.Resource = NewResource[AgentState](ctx, self, workflow.ExecuteActivity(sctx, wire.DeclareMachineActivity, agentId, spec))
+	h.Resource = NewResource[AgentState](ctx, self, workflow.ExecuteActivity(sctx, wire.DeclareAgentActivity, agentId, spec))
 	h.userData = workflow.ExecuteActivity(sctx, wire.AgentUserDataActivity, agentId)
 	adoptChildren(ctx, self, o.Children)
 	return h

@@ -9,7 +9,7 @@
 // The user-facing types live in the pipeline root package; side effects
 // sit behind Ops, implemented by the graphene server, which registers
 // this definition on its worker.
-package machine
+package agent
 
 import (
 	"fmt"
@@ -24,12 +24,12 @@ import (
 	"github.com/graphene-ci/pipeline/pkg/pipeline"
 )
 
-// Kind is the entity kind name; workflow IDs are "machine/{machine-id}".
-const Kind = entity.KindName("machine")
+// Kind is the entity kind name; workflow IDs are "agent/{agent-id}".
+const Kind = entity.KindName("agent")
 
 // State extends the shared observable state with flow-internal fields.
 type State struct {
-	pipeline.MachineState
+	pipeline.AgentState
 	ConnectedAt time.Time `json:"connectedAt,omitempty"`
 }
 
@@ -38,10 +38,10 @@ type State struct {
 type Ops interface {
 	// InstallSSH goes to the existing machine over ssh and runs the agent
 	// install script — the same bytes a fresh VM gets through user-data.
-	InstallSSH(machineId id.MachineId, install pipeline.SSHInstall) error
+	InstallSSH(agentId id.AgentId, install pipeline.SSHInstall) error
 	// AgentStatus reports whether the agent of the machine is currently
 	// connected and, if so, its addresses and the digest of its facts.
-	AgentStatus(machineId id.MachineId) (AgentStatus, error)
+	AgentStatus(agentId id.AgentId) (AgentStatus, error)
 }
 
 // AgentStatus is what the agent registry reports about a machine.
@@ -53,8 +53,8 @@ type AgentStatus struct {
 
 // Activity names (registered by the server against its Ops).
 const (
-	InstallSSHActivity  = "machine.install-ssh"
-	AgentStatusActivity = "machine.agent-status"
+	InstallSSHActivity  = "agent.install-ssh"
+	AgentStatusActivity = "agent.status"
 )
 
 // Options tune the machine flow.
@@ -81,16 +81,16 @@ func (o *Options) defaults() {
 
 // Definition builds the machine entity definition. The server registers
 // it on its worker together with activities implementing Ops.
-func Definition(opts Options) *entdefine.Definition[pipeline.MachineSpec, State] {
+func Definition(opts Options) *entdefine.Definition[pipeline.AgentSpec, State] {
 	opts.defaults()
-	def := entdefine.New[pipeline.MachineSpec, State](Kind,
-		entdefine.WithInit[pipeline.MachineSpec, State](func(ctx workflow.Context, spec pipeline.MachineSpec) (State, error) {
+	def := entdefine.New[pipeline.AgentSpec, State](Kind,
+		entdefine.WithInit[pipeline.AgentSpec, State](func(ctx workflow.Context, spec pipeline.AgentSpec) (State, error) {
 			return initMachine(ctx, opts, spec)
 		}),
 		// No finalizer: the record owns no machine — it never created one.
 		// Deleting the record leaves the real machine to whoever made it.
-		entdefine.WithReconcileEvery[pipeline.MachineSpec, State](opts.ReconcileEvery, reconcileMachine),
-		entdefine.WithSearchAttributes[pipeline.MachineSpec, State](true),
+		entdefine.WithReconcileEvery[pipeline.AgentSpec, State](opts.ReconcileEvery, reconcileMachine),
+		entdefine.WithSearchAttributes[pipeline.AgentSpec, State](true),
 	)
 	entdefine.Handle(def, publishCapability)
 	return def
@@ -123,7 +123,7 @@ type PublishCapabilityRes struct {
 
 // publishCapability merges the capability by name — re-publishing
 // replaces, the way SSA replaces.
-func publishCapability(_ workflow.Context, ec *entdefine.Ctx[pipeline.MachineSpec, State], cmd PublishCapabilityCmd) (PublishCapabilityRes, error) {
+func publishCapability(_ workflow.Context, ec *entdefine.Ctx[pipeline.AgentSpec, State], cmd PublishCapabilityCmd) (PublishCapabilityRes, error) {
 	st := ec.State()
 	for i, c := range st.Capabilities {
 		if c.Name == cmd.Capability.Name {
@@ -146,20 +146,20 @@ func activityCtx(ctx workflow.Context) workflow.Context {
 	})
 }
 
-// machineId derives the machine id from the entity workflow ID
+// agentId derives the machine id from the entity workflow ID
 // ("machine/{id}").
-func machineId(ctx workflow.Context) id.MachineId {
+func agentId(ctx workflow.Context) id.AgentId {
 	full := workflow.GetInfo(ctx).WorkflowExecution.ID
 	prefix := string(Kind) + "/"
 	if len(full) > len(prefix) {
-		return id.MachineId(full[len(prefix):])
+		return id.AgentId(full[len(prefix):])
 	}
-	return id.MachineId(full)
+	return id.AgentId(full)
 }
 
-func initMachine(ctx workflow.Context, opts Options, spec pipeline.MachineSpec) (State, error) {
+func initMachine(ctx workflow.Context, opts Options, spec pipeline.AgentSpec) (State, error) {
 	var st State
-	mid := machineId(ctx)
+	mid := agentId(ctx)
 	actx := activityCtx(ctx)
 
 	// The only acting case: put the agent on an existing machine over ssh.
@@ -190,12 +190,12 @@ func initMachine(ctx workflow.Context, opts Options, spec pipeline.MachineSpec) 
 	return st, fmt.Errorf("agent did not connect within %s", opts.ConnectTimeout)
 }
 
-func reconcileMachine(ctx workflow.Context, ec *entdefine.Ctx[pipeline.MachineSpec, State]) error {
+func reconcileMachine(ctx workflow.Context, ec *entdefine.Ctx[pipeline.AgentSpec, State]) error {
 	if ec.Phase() != entity.PhaseReady {
 		return nil
 	}
 	var status AgentStatus
-	if err := workflow.ExecuteActivity(activityCtx(ctx), AgentStatusActivity, machineId(ctx)).Get(ctx, &status); err != nil {
+	if err := workflow.ExecuteActivity(activityCtx(ctx), AgentStatusActivity, agentId(ctx)).Get(ctx, &status); err != nil {
 		return err
 	}
 	st := ec.State()

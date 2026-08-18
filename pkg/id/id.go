@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-// MachineId identifies one machine record.
-type MachineId string
+// AgentId identifies one agent record: our presence on a machine.
+type AgentId string
 
 // RunId identifies one pipeline run.
 type RunId string
@@ -36,7 +36,7 @@ func validate(kind, s string) error {
 }
 
 // Validate reports whether the machine id is well-formed.
-func (m MachineId) Validate() error { return validate("machine", string(m)) }
+func (m AgentId) Validate() error { return validate("agent", string(m)) }
 
 // Validate reports whether the run id is well-formed.
 func (r RunId) Validate() error { return validate("run", string(r)) }
@@ -50,9 +50,9 @@ func (p PipelineId) Validate() error { return validate("pipeline", string(p)) }
 // Validate reports whether the secret name is well-formed.
 func (s SecretId) Validate() error { return validate("secret", string(s)) }
 
-// ParseMachineId validates a machine id from external input.
-func ParseMachineId(s string) (MachineId, error) {
-	m := MachineId(s)
+// ParseAgentId validates a machine id from external input.
+func ParseAgentId(s string) (AgentId, error) {
+	m := AgentId(s)
 	if err := m.Validate(); err != nil {
 		return "", err
 	}
