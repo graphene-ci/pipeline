@@ -16,14 +16,13 @@ import (
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
-	"github.com/graphene-ci/pipeline/pkg/id"
 	"github.com/graphene-ci/pipeline/pkg/pipeline"
 )
 
-// Target is where an activity runs — satisfied by pipeline.AgentHandle.
-type Target interface {
-	AgentId() id.MachineId
-}
+// Target is where an activity runs — any agent, ours or foreign: the
+// same interface every consumer sees, an alias so selections plug into
+// fan-out without conversion.
+type Target = pipeline.Agent
 
 // Call is a self-described piece of code with its arguments bound: the
 // unit Activity executes. Build one with ActivityFn or take one from a
