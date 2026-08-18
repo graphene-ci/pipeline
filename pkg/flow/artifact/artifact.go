@@ -12,8 +12,9 @@ import (
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
-	"github.com/graphene-ci/pipeline/pkg/pipeline"
+	"github.com/graphene-ci/pipeline/pkg/flow/ownership"
 	"github.com/graphene-ci/pipeline/pkg/id"
+	"github.com/graphene-ci/pipeline/pkg/pipeline"
 	"github.com/graphene-ci/pipeline/pkg/ref"
 )
 
@@ -21,9 +22,10 @@ import (
 const Kind = entity.KindName("artifact")
 
 // State extends the shared observable state with teardown data the
-// finalizer needs.
+// finalizer needs and the owned half of the tree.
 type State struct {
 	pipeline.ArtifactState
+	ownership.State
 	Blob *ref.BlobRef `json:"blob,omitempty"`
 }
 
@@ -44,11 +46,13 @@ const (
 
 // Definition builds the artifact entity definition.
 func Definition() *entdefine.Definition[pipeline.ArtifactSpec, State] {
-	return entdefine.New[pipeline.ArtifactSpec, State](Kind,
+	def := entdefine.New[pipeline.ArtifactSpec, State](Kind,
 		entdefine.WithInit[pipeline.ArtifactSpec, State](initArtifact),
 		entdefine.WithFinalize[pipeline.ArtifactSpec, State](finalizeArtifact),
 		entdefine.WithSearchAttributes[pipeline.ArtifactSpec, State](true),
 	)
+	ownership.Register(def, func(st *State) *ownership.State { return &st.State })
+	return def
 }
 
 func initArtifact(ctx workflow.Context, spec pipeline.ArtifactSpec) (State, error) {
@@ -63,6 +67,7 @@ func initArtifact(ctx workflow.Context, spec pipeline.ArtifactSpec) (State, erro
 	st.Verified = true
 	st.ArtifactState.Blob = spec.Blob
 	st.Blob = &spec.Blob
+	ownership.Init(ctx, &st.State, spec.Owner)
 	return st, nil
 }
 

@@ -3,7 +3,7 @@ module github.com/graphene-ci/pipeline
 go 1.25.7
 
 require (
-	github.com/graphene-ci/temporal-entity v0.0.0-20260817131052-5b5aa3527ca8
+	github.com/graphene-ci/temporal-entity v0.0.0-20260818135158-717d0ab8b0f7
 	go.temporal.io/sdk v1.47.0
 )
 

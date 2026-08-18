@@ -140,7 +140,15 @@ const (
 // Search attribute keys used across the system in addition to the ones
 // registered by temporal-entity (EntityKind, EntityPhase).
 var (
-	// SearchAttrOwner carries the OwnerRef of an entity for listing and
-	// cascade queries ("find everything owned by run/X").
+	// SearchAttrOwner carries the CURRENT OwnerRef of an entity — flows
+	// upsert it on init and on transfer; the cascade is one visibility
+	// query ("find everything owned by run/X").
 	SearchAttrOwner = temporal.NewSearchAttributeKeyKeyword("EntityOwner")
+	// SearchAttrKeepUntil carries the stand-TTL deadline; the server's
+	// sweeper deletes what expired.
+	SearchAttrKeepUntil = temporal.NewSearchAttributeKeyTime("EntityKeepUntil")
 )
+
+// TransferOwnerCmdName is the entity command every OWNED system resource
+// serves: give the resource (and so its subtree) to a new owner.
+const TransferOwnerCmdName = "transfer-owner"
