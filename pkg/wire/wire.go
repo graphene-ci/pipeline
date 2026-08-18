@@ -45,6 +45,10 @@ const (
 	// on the machine's agent: the first touch of a machine by a run pays
 	// it, later touches are no-ops. Idempotent.
 	EnsureContainerActivity = "server.container.ensure"
+	// RunCleanupActivity is the guaranteed teardown of a finished run:
+	// delete everything the run owns, stop its machine containers. The
+	// run worker calls it on every exit path of the run workflow.
+	RunCleanupActivity = "server.run.cleanup"
 )
 
 // EnsureContainerRequest asks the server to bring the worker container
