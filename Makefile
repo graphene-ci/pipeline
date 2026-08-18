@@ -3,6 +3,7 @@
 BIN := $(CURDIR)/bin
 
 export PATH := $(BIN):$(PATH)
+export GOTOOLCHAIN := go1.26.5
 
 GOLANGCI_LINT_VERSION := v2.12.2
 

@@ -1,8 +1,14 @@
 // Package machine holds the temporal flow of the Machine system
-// resource: its definition on the temporal-entity chassis and the
-// lifecycle code (init, reconcile, finalize). The user-facing types live
-// in the pipeline root package; side effects sit behind Ops, implemented
-// by the graphene server, which registers this definition on its worker.
+// resource. A machine record is a LINK between a real machine — created
+// by whatever the user chose (crossplane through a resource library, a
+// person, a cloud console) — and its agent. The record never creates
+// machines; the only case where it acts is the ssh install: put the agent
+// on a machine that already exists. Readiness in every case means the
+// agent has connected.
+//
+// The user-facing types live in the pipeline root package; side effects
+// sit behind Ops, implemented by the graphene server, which registers
+// this definition on its worker.
 package machine
 
 import (
@@ -14,40 +20,41 @@ import (
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
-	"github.com/graphene-ci/pipeline/pkg/pipeline"
 	"github.com/graphene-ci/pipeline/pkg/id"
+	"github.com/graphene-ci/pipeline/pkg/pipeline"
 )
 
 // Kind is the entity kind name; workflow IDs are "machine/{machine-id}".
 const Kind = entity.KindName("machine")
 
-// State extends the shared observable state with teardown data the
-// finalizer needs (it sees only State — temporal-entity limitation,
-// candidate for a chassis change).
+// State extends the shared observable state with flow-internal fields.
 type State struct {
 	pipeline.MachineState
-	ConnectedAt time.Time             `json:"connectedAt,omitempty"`
-	Cloud       *pipeline.CloudSource `json:"cloud,omitempty"`
+	ConnectedAt time.Time `json:"connectedAt,omitempty"`
 }
 
-// Ops is the side-effect boundary of the machine flow: clouds and the
-// agent registry. Implemented by the server; every method idempotent.
+// Ops is the side-effect boundary of the machine flow. Implemented by the
+// server; every method idempotent.
 type Ops interface {
-	// CreateCloud creates (or finds by machine id) the machine in the
-	// cloud and returns its addresses.
-	CreateCloud(machineId id.MachineId, src pipeline.CloudSource) ([]string, error)
-	// DestroyCloud destroys the machine; not-found is not an error.
-	DestroyCloud(machineId id.MachineId, src pipeline.CloudSource) error
+	// InstallSSH goes to the existing machine over ssh and runs the agent
+	// install script — the same bytes a fresh VM gets through user-data.
+	InstallSSH(machineId id.MachineId, install pipeline.SSHInstall) error
 	// AgentStatus reports whether the agent of the machine is currently
-	// connected and, if so, the digest of its reported facts.
-	AgentStatus(machineId id.MachineId) (connected bool, factsDigest string, err error)
+	// connected and, if so, its addresses and the digest of its facts.
+	AgentStatus(machineId id.MachineId) (AgentStatus, error)
+}
+
+// AgentStatus is what the agent registry reports about a machine.
+type AgentStatus struct {
+	Connected   bool     `json:"connected"`
+	Addresses   []string `json:"addresses,omitempty"`
+	FactsDigest string   `json:"factsDigest,omitempty"`
 }
 
 // Activity names (registered by the server against its Ops).
 const (
-	CreateCloudActivity  = "machine.create-cloud"
-	DestroyCloudActivity = "machine.destroy-cloud"
-	AgentStatusActivity  = "machine.agent-status"
+	InstallSSHActivity  = "machine.install-ssh"
+	AgentStatusActivity = "machine.agent-status"
 )
 
 // Options tune the machine flow.
@@ -80,15 +87,11 @@ func Definition(opts Options) *entdefine.Definition[pipeline.MachineSpec, State]
 		entdefine.WithInit[pipeline.MachineSpec, State](func(ctx workflow.Context, spec pipeline.MachineSpec) (State, error) {
 			return initMachine(ctx, opts, spec)
 		}),
-		entdefine.WithFinalize[pipeline.MachineSpec, State](finalizeMachine),
+		// No finalizer: the record owns no machine — it never created one.
+		// Deleting the record leaves the real machine to whoever made it.
 		entdefine.WithReconcileEvery[pipeline.MachineSpec, State](opts.ReconcileEvery, reconcileMachine),
 		entdefine.WithSearchAttributes[pipeline.MachineSpec, State](true),
 	)
-}
-
-type agentStatus struct {
-	Connected   bool   `json:"connected"`
-	FactsDigest string `json:"factsDigest"`
 }
 
 func activityCtx(ctx workflow.Context) workflow.Context {
@@ -118,23 +121,24 @@ func initMachine(ctx workflow.Context, opts Options, spec pipeline.MachineSpec) 
 	mid := machineId(ctx)
 	actx := activityCtx(ctx)
 
-	if spec.Cloud != nil {
-		if err := workflow.ExecuteActivity(actx, CreateCloudActivity, mid, *spec.Cloud).Get(ctx, &st.Addresses); err != nil {
-			return st, fmt.Errorf("create in cloud: %w", err)
+	// The only acting case: put the agent on an existing machine over ssh.
+	if spec.SSH != nil {
+		if err := workflow.ExecuteActivity(actx, InstallSSHActivity, mid, *spec.SSH).Get(ctx, nil); err != nil {
+			return st, fmt.Errorf("ssh install: %w", err)
 		}
-		st.Cloud = spec.Cloud
 	}
 
-	// Readiness for both sources: the agent has connected.
+	// Readiness in every case: the agent has connected.
 	deadline := workflow.Now(ctx).Add(opts.ConnectTimeout)
 	for workflow.Now(ctx).Before(deadline) {
-		var status agentStatus
+		var status AgentStatus
 		if err := workflow.ExecuteActivity(actx, AgentStatusActivity, mid).Get(ctx, &status); err != nil {
 			return st, fmt.Errorf("agent status: %w", err)
 		}
 		if status.Connected {
 			st.AgentConnected = true
 			st.ConnectedAt = workflow.Now(ctx)
+			st.Addresses = status.Addresses
 			st.FactsDigest = status.FactsDigest
 			return st, nil
 		}
@@ -149,23 +153,15 @@ func reconcileMachine(ctx workflow.Context, ec *entdefine.Ctx[pipeline.MachineSp
 	if ec.Phase() != entity.PhaseReady {
 		return nil
 	}
-	var status agentStatus
+	var status AgentStatus
 	if err := workflow.ExecuteActivity(activityCtx(ctx), AgentStatusActivity, machineId(ctx)).Get(ctx, &status); err != nil {
 		return err
 	}
 	st := ec.State()
 	st.AgentConnected = status.Connected
 	if status.Connected {
+		st.Addresses = status.Addresses
 		st.FactsDigest = status.FactsDigest
 	}
 	return nil
-}
-
-func finalizeMachine(ctx workflow.Context, st *State) error {
-	// Recognized machines are not ours to destroy: no cloud source in
-	// state — deleting the record leaves the machine untouched.
-	if st.Cloud == nil {
-		return nil
-	}
-	return workflow.ExecuteActivity(activityCtx(ctx), DestroyCloudActivity, machineId(ctx), *st.Cloud).Get(ctx, nil)
 }
