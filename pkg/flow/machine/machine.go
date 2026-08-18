@@ -83,7 +83,7 @@ func (o *Options) defaults() {
 // it on its worker together with activities implementing Ops.
 func Definition(opts Options) *entdefine.Definition[pipeline.MachineSpec, State] {
 	opts.defaults()
-	return entdefine.New[pipeline.MachineSpec, State](Kind,
+	def := entdefine.New[pipeline.MachineSpec, State](Kind,
 		entdefine.WithInit[pipeline.MachineSpec, State](func(ctx workflow.Context, spec pipeline.MachineSpec) (State, error) {
 			return initMachine(ctx, opts, spec)
 		}),
@@ -92,6 +92,47 @@ func Definition(opts Options) *entdefine.Definition[pipeline.MachineSpec, State]
 		entdefine.WithReconcileEvery[pipeline.MachineSpec, State](opts.ReconcileEvery, reconcileMachine),
 		entdefine.WithSearchAttributes[pipeline.MachineSpec, State](true),
 	)
+	entdefine.Handle(def, publishCapability)
+	return def
+}
+
+// PublishCapabilityCmd writes what the machine now CAN onto its record:
+// a capability belongs to the machine, whoever published it.
+type PublishCapabilityCmd struct {
+	Capability pipeline.Capability `json:"capability"`
+}
+
+// Name is the command's wire identity.
+func (PublishCapabilityCmd) Name() entity.CommandName { return "publish-capability" }
+
+// Result binds the response type.
+func (PublishCapabilityCmd) Result() PublishCapabilityRes { return PublishCapabilityRes{} }
+
+// Validate rejects an unnamed capability before anything runs.
+func (c PublishCapabilityCmd) Validate() error {
+	if c.Capability.Name == "" {
+		return fmt.Errorf("capability needs a name")
+	}
+	return nil
+}
+
+// PublishCapabilityRes reports the record's capability count.
+type PublishCapabilityRes struct {
+	Count int `json:"count"`
+}
+
+// publishCapability merges the capability by name — re-publishing
+// replaces, the way SSA replaces.
+func publishCapability(_ workflow.Context, ec *entdefine.Ctx[pipeline.MachineSpec, State], cmd PublishCapabilityCmd) (PublishCapabilityRes, error) {
+	st := ec.State()
+	for i, c := range st.Capabilities {
+		if c.Name == cmd.Capability.Name {
+			st.Capabilities[i] = cmd.Capability
+			return PublishCapabilityRes{Count: len(st.Capabilities)}, nil
+		}
+	}
+	st.Capabilities = append(st.Capabilities, cmd.Capability)
+	return PublishCapabilityRes{Count: len(st.Capabilities)}, nil
 }
 
 func activityCtx(ctx workflow.Context) workflow.Context {

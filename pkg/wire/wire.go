@@ -56,7 +56,34 @@ const (
 	// a new owner. Ownership is given away, never taken: the caller must
 	// be the current owner's side.
 	TransferResourceActivity = "server.resource.transfer"
+	// AttachMachineActivity waits for an EXISTING machine record to be
+	// ready and returns its state — recognition, never creation: a
+	// missing record is an error.
+	AttachMachineActivity = "server.machine.attach"
+	// AttachArtifactActivity is the same recognition for artifacts.
+	AttachArtifactActivity = "server.artifact.attach"
+	// SelectAgentsActivity lists the machine ids matching a selector
+	// (record labels + capability needs) — a snapshot at call time.
+	SelectAgentsActivity = "server.agents.select"
+	// PublishCapabilityActivity writes a capability onto a machine's
+	// record.
+	PublishCapabilityActivity = "server.capability.publish"
 )
+
+// NeedSpec is one capability requirement: the capability must exist,
+// be ready, and match the label constraints — equality and In only,
+// k8s-selector semantics; the system never interprets values.
+type NeedSpec struct {
+	Name        string              `json:"name"`
+	MatchLabels map[string]string   `json:"matchLabels,omitempty"`
+	In          map[string][]string `json:"in,omitempty"`
+}
+
+// AgentSelector picks agents by record labels and capability needs.
+type AgentSelector struct {
+	Labels map[string]string `json:"labels,omitempty"`
+	Needs  []NeedSpec        `json:"needs,omitempty"`
+}
 
 // TransferResourceRequest asks the server to reparent a resource.
 type TransferResourceRequest struct {

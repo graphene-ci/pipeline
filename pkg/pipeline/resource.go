@@ -7,6 +7,7 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/graphene-ci/pipeline/pkg/ref"
+	"github.com/graphene-ci/pipeline/pkg/wire"
 )
 
 // Resource is the handle primitive: declaring a resource returns one
@@ -57,6 +58,42 @@ func (r Resource[Out]) TryReady(ctx Context) (Out, error) {
 // as the workflow's error — user code stays free of plumbing.
 type resourceFailure struct{ err error }
 
+// Attached is the handle of a FOREIGN resource: recognized, never
+// created. It reads like any handle — Ready blocks, outputs are typed —
+// but it deliberately has no ResourceRef, so it cannot be a Parent or a
+// Child: what is not yours cannot be burdened or given away. Nothing
+// else distinguishes it; consumers never check types.
+type Attached[Out any] struct {
+	fut workflow.Future
+	rec bool
+}
+
+// Ready blocks until the foreign resource is ready and returns its
+// outputs; a failure fails the run here (TryReady to handle in code).
+func (r Attached[Out]) Ready(ctx Context) Out {
+	out, err := r.TryReady(ctx)
+	if err != nil {
+		panic(resourceFailure{err: err})
+	}
+	return out
+}
+
+// TryReady is Ready with the error in hand.
+func (r Attached[Out]) TryReady(ctx Context) (Out, error) {
+	var out Out
+	if r.rec || r.fut == nil {
+		return out, nil
+	}
+	err := r.fut.Get(ctx, &out)
+	return out, err
+}
+
+// NewAttached wraps a future into a foreign-resource handle — for
+// libraries.
+func NewAttached[Out any](ctx Context, fut workflow.Future) Attached[Out] {
+	return Attached[Out]{fut: fut, rec: ctx.Recording()}
+}
+
 // NewResource wraps a future into a handle — the constructor RESOURCE
 // LIBRARIES use; user code receives handles, never builds them.
 func NewResource[Out any](ctx Context, self ref.OwnerRef, fut workflow.Future) Resource[Out] {
@@ -71,6 +108,12 @@ type ResourceOptions struct {
 	// code is their current owner and GIVES them — ownership is given
 	// away, never taken.
 	Children []ref.OwnerRef
+	// Labels are the record's own labels — selection by equality,
+	// k8s-style; the system never interprets values.
+	Labels map[string]string
+	// Needs are capability requirements: readiness of the resource
+	// additionally waits for them (agents today).
+	Needs []wire.NeedSpec
 }
 
 // ResourceOption tunes a resource declaration.
@@ -89,6 +132,53 @@ func Children(hs ...Handle) ResourceOption {
 		for _, h := range hs {
 			o.Children = append(o.Children, h.ResourceRef())
 		}
+	}
+}
+
+// WithLabels labels the record: selection by equality, never
+// interpretation.
+func WithLabels(labels map[string]string) ResourceOption {
+	return func(o *ResourceOptions) {
+		if o.Labels == nil {
+			o.Labels = map[string]string{}
+		}
+		for k, v := range labels {
+			o.Labels[k] = v
+		}
+	}
+}
+
+// Need requires a capability on the resource's machine: it must exist,
+// be ready, and match the constraints. Readiness waits for it — the
+// refusal comes before work is dispatched, not after it fails.
+func Need(name string, constraints ...NeedConstraint) ResourceOption {
+	spec := wire.NeedSpec{Name: name}
+	for _, c := range constraints {
+		c(&spec)
+	}
+	return func(o *ResourceOptions) { o.Needs = append(o.Needs, spec) }
+}
+
+// NeedConstraint narrows a capability requirement.
+type NeedConstraint func(*wire.NeedSpec)
+
+// WhereLabel requires equality on one capability label.
+func WhereLabel(key, value string) NeedConstraint {
+	return func(s *wire.NeedSpec) {
+		if s.MatchLabels == nil {
+			s.MatchLabels = map[string]string{}
+		}
+		s.MatchLabels[key] = value
+	}
+}
+
+// WhereIn requires the capability label's value to be one of the given.
+func WhereIn(key string, values ...string) NeedConstraint {
+	return func(s *wire.NeedSpec) {
+		if s.In == nil {
+			s.In = map[string][]string{}
+		}
+		s.In[key] = append(s.In[key], values...)
 	}
 }
 

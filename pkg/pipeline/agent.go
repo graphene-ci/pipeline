@@ -20,6 +20,15 @@ import (
 // AgentState is what the connected agent reported.
 type AgentState = MachineState
 
+// Agent is the target surface of an agent — OURS or FOREIGN: consumers
+// (activities, artifact sources, libraries) take this interface and
+// never distinguish the two. The only difference lives outside it: an
+// attached agent has no ResourceRef and cannot enter the ownership
+// tree.
+type Agent interface {
+	AgentId() id.MachineId
+}
+
 // AgentHandle is the agent resource handle; Ready when the agent of the
 // machine has connected. It is the target of activities.
 type AgentHandle struct {
@@ -49,6 +58,70 @@ func (a AgentHandle) CloudInit() string {
 	return script
 }
 
+// AttachedAgent is a FOREIGN agent: recognized, never created, never
+// owned. Everything a consumer can do with an agent works on it.
+type AttachedAgent struct {
+	Attached[AgentState]
+	agentId id.MachineId
+}
+
+// AgentId names the agent's record — the routing key of its activity
+// queue.
+func (a AttachedAgent) AgentId() id.MachineId { return a.agentId }
+
+// AttachAgent recognizes an EXISTING agent created outside this run: a
+// missing record is an error, never a creation. Ready waits for the
+// agent AND for the Need requirements — the refusal comes before work
+// is dispatched. Only Need options apply.
+func AttachAgent(ctx Context, name string, opts ...ResourceOption) AttachedAgent {
+	agentId := id.MachineId(name)
+	h := AttachedAgent{agentId: agentId}
+	if ctx.Recording() {
+		h.Attached = NewAttached[AgentState](ctx, nil)
+		return h
+	}
+	var o ResourceOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	fut := workflow.ExecuteActivity(serverCtx(ctx), wire.AttachMachineActivity, agentId, o.Needs)
+	h.Attached = NewAttached[AgentState](ctx, fut)
+	return h
+}
+
+// SelectAgents picks the agents matching the selector — record labels
+// plus capability needs — as a SNAPSHOT at call time. Foreign by
+// construction: the selection takes no ownership.
+func SelectAgents(ctx Context, opts ...ResourceOption) ([]Agent, error) {
+	if ctx.Recording() {
+		return nil, nil
+	}
+	var o ResourceOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	sel := wire.AgentSelector{Labels: o.Labels, Needs: o.Needs}
+	var ids []id.MachineId
+	if err := workflow.ExecuteActivity(serverCtx(ctx), wire.SelectAgentsActivity, sel).Get(ctx, &ids); err != nil {
+		return nil, err
+	}
+	out := make([]Agent, 0, len(ids))
+	for _, machineId := range ids {
+		out = append(out, AttachAgent(ctx, string(machineId)))
+	}
+	return out, nil
+}
+
+// PublishCapability writes what the machine now CAN onto its record.
+// Libraries publish from their own activity bodies (capabilityapi);
+// this is the workflow-side form for what a person or an image brought.
+func PublishCapability(ctx Context, agent Agent, capability Capability) error {
+	if ctx.Recording() {
+		return nil
+	}
+	return workflow.ExecuteActivity(serverCtx(ctx), wire.PublishCapabilityActivity, agent.AgentId(), capability).Get(ctx, nil)
+}
+
 // NewAgent declares the agent record and returns its handle without
 // blocking. The real machine comes from whatever the user chose — a
 // crossplane resource with CloudInit in user-data, a person, an ssh
@@ -62,7 +135,7 @@ func NewAgent(ctx Context, name string, opts ...ResourceOption) AgentHandle {
 		return h
 	}
 	o := BuildResourceOptions(ctx, opts)
-	spec := MachineSpec{Owner: o.Parent}
+	spec := MachineSpec{Owner: o.Parent, Labels: o.Labels, Needs: o.Needs}
 	sctx := serverCtx(ctx)
 	h.Resource = NewResource[AgentState](ctx, self, workflow.ExecuteActivity(sctx, wire.DeclareMachineActivity, agentId, spec))
 	h.userData = workflow.ExecuteActivity(sctx, wire.AgentUserDataActivity, agentId)
@@ -82,7 +155,7 @@ func NewAgentViaSSH(ctx Context, name string, install SSHInstall, opts ...Resour
 		return h
 	}
 	o := BuildResourceOptions(ctx, opts)
-	spec := MachineSpec{SSH: &install, Owner: o.Parent}
+	spec := MachineSpec{SSH: &install, Owner: o.Parent, Labels: o.Labels, Needs: o.Needs}
 	sctx := serverCtx(ctx)
 	h.Resource = NewResource[AgentState](ctx, self, workflow.ExecuteActivity(sctx, wire.DeclareMachineActivity, agentId, spec))
 	h.userData = workflow.ExecuteActivity(sctx, wire.AgentUserDataActivity, agentId)
