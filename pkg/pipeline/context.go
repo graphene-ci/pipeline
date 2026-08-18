@@ -3,7 +3,9 @@ package pipeline
 import (
 	"sync"
 
+	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/log"
+	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/graphene-ci/pipeline/pkg/id"
@@ -57,11 +59,26 @@ func (c Context) RecordActivity(name string, fn any) {
 	c.rec.record(name, fn)
 }
 
+// RecordWorker registers a worker-assembly hook during the recording
+// pass: libraries that bring WHOLE workflows (entity definitions), not
+// just activity bodies, register them here. The hook runs when Main
+// builds each role's worker, with the worker and the Temporal client in
+// hand. Outside the recording pass the call is a no-op.
+func (c Context) RecordWorker(fn func(w worker.Worker, cl client.Client) error) {
+	if c.rec == nil {
+		return
+	}
+	c.rec.mu.Lock()
+	defer c.rec.mu.Unlock()
+	c.rec.workerHooks = append(c.rec.workerHooks, fn)
+}
+
 // recorder collects what the registration pass discovers.
 type recorder struct {
-	mu         sync.Mutex
-	activities map[string]any
-	errs       []error
+	mu          sync.Mutex
+	activities  map[string]any
+	workerHooks []func(w worker.Worker, cl client.Client) error
+	errs        []error
 }
 
 func newRecorder() *recorder {
