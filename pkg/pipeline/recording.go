@@ -17,7 +17,7 @@ func optimisticZero[T any]() T {
 }
 
 func setBoolsTrue(v reflect.Value) {
-	switch v.Kind() {
+	switch v.Kind() { //nolint:exhaustive // only these kinds carry reachable bools
 	case reflect.Bool:
 		if v.CanSet() {
 			v.SetBool(true)
@@ -26,7 +26,7 @@ func setBoolsTrue(v reflect.Value) {
 		for i := 0; i < v.NumField(); i++ {
 			setBoolsTrue(v.Field(i))
 		}
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if v.CanSet() && v.IsNil() && v.Type().Elem().Kind() == reflect.Struct {
 			v.Set(reflect.New(v.Type().Elem()))
 		}
