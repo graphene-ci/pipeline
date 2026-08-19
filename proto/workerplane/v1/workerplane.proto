@@ -72,3 +72,34 @@ message GetBlobRequest {
 message GetBlobResponse {
   bytes chunk = 1;
 }
+
+// EventsAPI carries DOMAIN EVENTS into an entity's history — the plane
+// of truth. A note is a milestone, not a log line: streams belong in
+// telemetry.
+service EventsAPI {
+  rpc Emit(EmitRequest) returns (EmitResponse);
+}
+
+message EmitRequest {
+  // Ref addresses the entity ("kind/id").
+  string ref = 1;
+  string name = 2;
+  // Payload is the event's body as JSON.
+  bytes payload = 3;
+}
+
+message EmitResponse {}
+
+// ManifestAPI records what a pipeline binary IS: published on every
+// worker start, deduplicated by content server-side.
+service ManifestAPI {
+  rpc PublishManifest(PublishManifestRequest) returns (PublishManifestResponse);
+}
+
+message PublishManifestRequest {
+  // Manifest is graphene.manifest.v1.Manifest as protojson — kept as
+  // bytes so the worker plane needs no cross-file proto import.
+  bytes manifest = 1;
+}
+
+message PublishManifestResponse {}

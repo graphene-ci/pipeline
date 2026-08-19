@@ -2,6 +2,8 @@ lint:
   use:
     - DEFAULT
   service_suffix: API
+deps:
+  - github.com/gopherex/schemapb
 generate:
   inputs:
     - directory: proto

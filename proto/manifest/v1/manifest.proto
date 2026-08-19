@@ -1,0 +1,23 @@
+// The pipeline manifest: everything the recording pass discovers about
+// one pipeline binary — published on every worker start, shown by the
+// CLI/UI before any run exists.
+syntax = "proto3";
+
+package graphene.manifest.v1;
+
+import "schemapb/schema.proto";
+
+option go_package = "github.com/graphene-ci/pipeline/pkg/proto/manifest/v1;manifestpb";
+
+message Manifest {
+  string pipeline_id = 1;
+  // Params/Result are gopherex schemapb schemas: the runtime
+  // form/validation descriptor a UI renders and validates against
+  // (four-language consumers, CEL rules).
+  schemapb.Schema params_schema = 2;
+  schemapb.Schema result_schema = 3;
+  // Activities discovered by the recording pass (wire names, sorted).
+  repeated string activities = 4;
+  // Kinds are the entity kinds the pipeline's libraries declare.
+  repeated string kinds = 5;
+}

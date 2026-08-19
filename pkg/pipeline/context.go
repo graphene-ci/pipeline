@@ -76,16 +76,50 @@ func (c Context) RecordWorker(fn func(w worker.Worker, cl client.Client) error) 
 	c.rec.workerHooks = append(c.rec.workerHooks, fn)
 }
 
+// RecordKind notes an entity kind the pipeline's libraries declare —
+// manifest material. Recording pass only.
+func (c Context) RecordKind(name string) {
+	if c.rec == nil {
+		return
+	}
+	c.rec.mu.Lock()
+	defer c.rec.mu.Unlock()
+	c.rec.kinds[name] = true
+}
+
 // recorder collects what the registration pass discovers.
 type recorder struct {
 	mu          sync.Mutex
 	activities  map[string]any
 	workerHooks []func(w worker.Worker, cl client.Client) error
+	kinds       map[string]bool
 	errs        []error
 }
 
 func newRecorder() *recorder {
-	return &recorder{activities: map[string]any{}}
+	return &recorder{activities: map[string]any{}, kinds: map[string]bool{}}
+}
+
+// activityNames lists the discovered wire names.
+func (r *recorder) activityNames() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]string, 0, len(r.activities))
+	for name := range r.activities {
+		out = append(out, name)
+	}
+	return out
+}
+
+// kindNames lists the declared entity kinds.
+func (r *recorder) kindNames() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]string, 0, len(r.kinds))
+	for name := range r.kinds {
+		out = append(out, name)
+	}
+	return out
 }
 
 func (r *recorder) record(name string, fn any) {

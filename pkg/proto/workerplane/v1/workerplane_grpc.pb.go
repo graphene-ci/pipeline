@@ -381,3 +381,221 @@ var BlobsAPI_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "proto/workerplane/v1/workerplane.proto",
 }
+
+const (
+	EventsAPI_Emit_FullMethodName = "/graphene.workerplane.v1.EventsAPI/Emit"
+)
+
+// EventsAPIClient is the client API for EventsAPI service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// EventsAPI carries DOMAIN EVENTS into an entity's history — the plane
+// of truth. A note is a milestone, not a log line: streams belong in
+// telemetry.
+type EventsAPIClient interface {
+	Emit(ctx context.Context, in *EmitRequest, opts ...grpc.CallOption) (*EmitResponse, error)
+}
+
+type eventsAPIClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewEventsAPIClient(cc grpc.ClientConnInterface) EventsAPIClient {
+	return &eventsAPIClient{cc}
+}
+
+func (c *eventsAPIClient) Emit(ctx context.Context, in *EmitRequest, opts ...grpc.CallOption) (*EmitResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EmitResponse)
+	err := c.cc.Invoke(ctx, EventsAPI_Emit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// EventsAPIServer is the server API for EventsAPI service.
+// All implementations must embed UnimplementedEventsAPIServer
+// for forward compatibility.
+//
+// EventsAPI carries DOMAIN EVENTS into an entity's history — the plane
+// of truth. A note is a milestone, not a log line: streams belong in
+// telemetry.
+type EventsAPIServer interface {
+	Emit(context.Context, *EmitRequest) (*EmitResponse, error)
+	mustEmbedUnimplementedEventsAPIServer()
+}
+
+// UnimplementedEventsAPIServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedEventsAPIServer struct{}
+
+func (UnimplementedEventsAPIServer) Emit(context.Context, *EmitRequest) (*EmitResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Emit not implemented")
+}
+func (UnimplementedEventsAPIServer) mustEmbedUnimplementedEventsAPIServer() {}
+func (UnimplementedEventsAPIServer) testEmbeddedByValue()                   {}
+
+// UnsafeEventsAPIServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to EventsAPIServer will
+// result in compilation errors.
+type UnsafeEventsAPIServer interface {
+	mustEmbedUnimplementedEventsAPIServer()
+}
+
+func RegisterEventsAPIServer(s grpc.ServiceRegistrar, srv EventsAPIServer) {
+	// If the following call panics, it indicates UnimplementedEventsAPIServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&EventsAPI_ServiceDesc, srv)
+}
+
+func _EventsAPI_Emit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EmitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EventsAPIServer).Emit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EventsAPI_Emit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EventsAPIServer).Emit(ctx, req.(*EmitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// EventsAPI_ServiceDesc is the grpc.ServiceDesc for EventsAPI service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var EventsAPI_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "graphene.workerplane.v1.EventsAPI",
+	HandlerType: (*EventsAPIServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Emit",
+			Handler:    _EventsAPI_Emit_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "proto/workerplane/v1/workerplane.proto",
+}
+
+const (
+	ManifestAPI_PublishManifest_FullMethodName = "/graphene.workerplane.v1.ManifestAPI/PublishManifest"
+)
+
+// ManifestAPIClient is the client API for ManifestAPI service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// ManifestAPI records what a pipeline binary IS: published on every
+// worker start, deduplicated by content server-side.
+type ManifestAPIClient interface {
+	PublishManifest(ctx context.Context, in *PublishManifestRequest, opts ...grpc.CallOption) (*PublishManifestResponse, error)
+}
+
+type manifestAPIClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewManifestAPIClient(cc grpc.ClientConnInterface) ManifestAPIClient {
+	return &manifestAPIClient{cc}
+}
+
+func (c *manifestAPIClient) PublishManifest(ctx context.Context, in *PublishManifestRequest, opts ...grpc.CallOption) (*PublishManifestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishManifestResponse)
+	err := c.cc.Invoke(ctx, ManifestAPI_PublishManifest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ManifestAPIServer is the server API for ManifestAPI service.
+// All implementations must embed UnimplementedManifestAPIServer
+// for forward compatibility.
+//
+// ManifestAPI records what a pipeline binary IS: published on every
+// worker start, deduplicated by content server-side.
+type ManifestAPIServer interface {
+	PublishManifest(context.Context, *PublishManifestRequest) (*PublishManifestResponse, error)
+	mustEmbedUnimplementedManifestAPIServer()
+}
+
+// UnimplementedManifestAPIServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedManifestAPIServer struct{}
+
+func (UnimplementedManifestAPIServer) PublishManifest(context.Context, *PublishManifestRequest) (*PublishManifestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishManifest not implemented")
+}
+func (UnimplementedManifestAPIServer) mustEmbedUnimplementedManifestAPIServer() {}
+func (UnimplementedManifestAPIServer) testEmbeddedByValue()                     {}
+
+// UnsafeManifestAPIServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ManifestAPIServer will
+// result in compilation errors.
+type UnsafeManifestAPIServer interface {
+	mustEmbedUnimplementedManifestAPIServer()
+}
+
+func RegisterManifestAPIServer(s grpc.ServiceRegistrar, srv ManifestAPIServer) {
+	// If the following call panics, it indicates UnimplementedManifestAPIServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&ManifestAPI_ServiceDesc, srv)
+}
+
+func _ManifestAPI_PublishManifest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishManifestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ManifestAPIServer).PublishManifest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ManifestAPI_PublishManifest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ManifestAPIServer).PublishManifest(ctx, req.(*PublishManifestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ManifestAPI_ServiceDesc is the grpc.ServiceDesc for ManifestAPI service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ManifestAPI_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "graphene.workerplane.v1.ManifestAPI",
+	HandlerType: (*ManifestAPIServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "PublishManifest",
+			Handler:    _ManifestAPI_PublishManifest_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "proto/workerplane/v1/workerplane.proto",
+}

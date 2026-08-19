@@ -9,6 +9,7 @@ import (
 	"time"
 
 	temporalotel "go.temporal.io/sdk/contrib/opentelemetry"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
@@ -19,8 +20,10 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/graphene-ci/pipeline/pkg/id"
+	"github.com/graphene-ci/pipeline/pkg/manifest"
 	"github.com/graphene-ci/pipeline/pkg/obs"
 	"github.com/graphene-ci/pipeline/pkg/wire"
+	"github.com/graphene-ci/pipeline/pkg/workerapi"
 )
 
 // Main is the entry point of a pipeline binary: one main == one
@@ -57,6 +60,22 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) e
 	rec, err := record(pipelineId, fn)
 	if err != nil {
 		return err
+	}
+
+	// The manifest: what this binary IS, straight from the recording
+	// pass. GRAPHENE_MANIFEST=1 dumps it and exits — the no-server way
+	// to inspect a pipeline.
+	m, err := manifest.Build[P, R](string(pipelineId), rec.activityNames(), rec.kindNames())
+	if err != nil {
+		return fmt.Errorf("manifest: %w", err)
+	}
+	manifestJSON, err := protojson.Marshal(m)
+	if err != nil {
+		return fmt.Errorf("manifest: %w", err)
+	}
+	if dump, _ := strconv.ParseBool(os.Getenv("GRAPHENE_MANIFEST")); dump {
+		fmt.Println(string(manifestJSON))
+		return nil
 	}
 
 	role := os.Getenv(wire.EnvRole)
@@ -106,6 +125,16 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) e
 
 	switch role {
 	case "run":
+		// The run worker announces the manifest — every start refreshes
+		// the record; the server deduplicates by content. Best effort:
+		// a pipeline must run even if the announcement fails.
+		go func() {
+			pubCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := workerapi.PublishManifest(pubCtx, manifestJSON); err != nil {
+				fmt.Fprintln(os.Stderr, "pipeline: manifest publication failed:", err)
+			}
+		}()
 		w := worker.New(c, wire.RunQueue(runId), worker.Options{
 			// Guaranteed teardown: every exit path of the run workflow
 			// triggers the server's cleanup.
