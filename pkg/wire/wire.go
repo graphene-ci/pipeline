@@ -4,6 +4,8 @@
 package wire
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"go.temporal.io/sdk/temporal"
@@ -77,6 +79,24 @@ type NeedSpec struct {
 	Name        string              `json:"name"`
 	MatchLabels map[string]string   `json:"matchLabels,omitempty"`
 	In          map[string][]string `json:"in,omitempty"`
+}
+
+// LabelPrefixSystem is the reserved label namespace: keys under it are
+// written by the system, never by user code.
+const LabelPrefixSystem = "graphene.io/"
+
+// LabelRun marks the run that created a record — created-by, stable
+// across ownership transfers (unlike EntityOwner).
+const LabelRun = "graphene.io/run"
+
+// ValidateUserLabels rejects labels a user may not set.
+func ValidateUserLabels(labels map[string]string) error {
+	for k := range labels {
+		if strings.HasPrefix(k, LabelPrefixSystem) {
+			return fmt.Errorf("label %q: the %q prefix is reserved for the system", k, LabelPrefixSystem)
+		}
+	}
+	return nil
 }
 
 // AgentSelector picks agents by record labels and capability needs.
