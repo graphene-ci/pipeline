@@ -6,6 +6,7 @@ require (
 	github.com/google/go-containerregistry v0.21.9
 	github.com/gopherex/schemapb/go v0.0.0-20260805100557-b08e53066d63
 	github.com/graphene-ci/temporal-entity v0.0.0-20260818135158-717d0ab8b0f7
+	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.21.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.45.0
@@ -38,7 +39,6 @@ require (
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/cel-go v0.30.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/klauspost/compress v1.19.1 // indirect
 	github.com/nexus-rpc/nexus-proto-annotations v0.1.0 // indirect
