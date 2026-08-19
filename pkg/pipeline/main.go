@@ -78,6 +78,12 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) e
 		return nil
 	}
 
+	// The binary manages its own pipeline: push and run are subcommands
+	// of the user's binary, not of a separate CLI.
+	if handled, err := runCLI[P](pipelineId, manifestJSON); handled {
+		return err
+	}
+
 	role := os.Getenv(wire.EnvRole)
 	if role == "" {
 		role = "run"
