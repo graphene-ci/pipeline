@@ -151,3 +151,32 @@ func (r *streamReader) Read(p []byte) (int, error) {
 }
 
 func (r *streamReader) Close() error { return nil }
+
+// EmitEvent puts a domain event into an entity's history — a
+// milestone, not a log line (each event costs the entity history
+// budget; streams belong in telemetry).
+func EmitEvent(ctx context.Context, ref, name string, payload []byte) error {
+	c, err := dial()
+	if err != nil {
+		return err
+	}
+	_, err = workerplanev1.NewEventsAPIClient(c).Emit(ctx, &workerplanev1.EmitRequest{
+		Ref:     ref,
+		Name:    name,
+		Payload: payload,
+	})
+	return err
+}
+
+// PublishManifest records what this pipeline binary IS; the server
+// deduplicates by content.
+func PublishManifest(ctx context.Context, manifest []byte) error {
+	c, err := dial()
+	if err != nil {
+		return err
+	}
+	_, err = workerplanev1.NewManifestAPIClient(c).PublishManifest(ctx, &workerplanev1.PublishManifestRequest{
+		Manifest: manifest,
+	})
+	return err
+}

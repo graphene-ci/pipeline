@@ -475,6 +475,186 @@ func (x *GetBlobResponse) GetChunk() []byte {
 	return nil
 }
 
+type EmitRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Ref addresses the entity ("kind/id").
+	Ref  string `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// Payload is the event's body as JSON.
+	Payload       []byte `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EmitRequest) Reset() {
+	*x = EmitRequest{}
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EmitRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EmitRequest) ProtoMessage() {}
+
+func (x *EmitRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EmitRequest.ProtoReflect.Descriptor instead.
+func (*EmitRequest) Descriptor() ([]byte, []int) {
+	return file_proto_workerplane_v1_workerplane_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *EmitRequest) GetRef() string {
+	if x != nil {
+		return x.Ref
+	}
+	return ""
+}
+
+func (x *EmitRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *EmitRequest) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+type EmitResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EmitResponse) Reset() {
+	*x = EmitResponse{}
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EmitResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EmitResponse) ProtoMessage() {}
+
+func (x *EmitResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EmitResponse.ProtoReflect.Descriptor instead.
+func (*EmitResponse) Descriptor() ([]byte, []int) {
+	return file_proto_workerplane_v1_workerplane_proto_rawDescGZIP(), []int{10}
+}
+
+type PublishManifestRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Manifest is graphene.manifest.v1.Manifest as protojson — kept as
+	// bytes so the worker plane needs no cross-file proto import.
+	Manifest      []byte `protobuf:"bytes,1,opt,name=manifest,proto3" json:"manifest,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PublishManifestRequest) Reset() {
+	*x = PublishManifestRequest{}
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PublishManifestRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PublishManifestRequest) ProtoMessage() {}
+
+func (x *PublishManifestRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PublishManifestRequest.ProtoReflect.Descriptor instead.
+func (*PublishManifestRequest) Descriptor() ([]byte, []int) {
+	return file_proto_workerplane_v1_workerplane_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *PublishManifestRequest) GetManifest() []byte {
+	if x != nil {
+		return x.Manifest
+	}
+	return nil
+}
+
+type PublishManifestResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PublishManifestResponse) Reset() {
+	*x = PublishManifestResponse{}
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PublishManifestResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PublishManifestResponse) ProtoMessage() {}
+
+func (x *PublishManifestResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PublishManifestResponse.ProtoReflect.Descriptor instead.
+func (*PublishManifestResponse) Descriptor() ([]byte, []int) {
+	return file_proto_workerplane_v1_workerplane_proto_rawDescGZIP(), []int{12}
+}
+
 var File_proto_workerplane_v1_workerplane_proto protoreflect.FileDescriptor
 
 const file_proto_workerplane_v1_workerplane_proto_rawDesc = "" +
@@ -510,7 +690,15 @@ const file_proto_workerplane_v1_workerplane_proto_rawDesc = "" +
 	"\x0eGetBlobRequest\x12\x1a\n" +
 	"\blocation\x18\x01 \x01(\tR\blocation\"'\n" +
 	"\x0fGetBlobResponse\x12\x14\n" +
-	"\x05chunk\x18\x01 \x01(\fR\x05chunk2p\n" +
+	"\x05chunk\x18\x01 \x01(\fR\x05chunk\"M\n" +
+	"\vEmitRequest\x12\x10\n" +
+	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
+	"\apayload\x18\x03 \x01(\fR\apayload\"\x0e\n" +
+	"\fEmitResponse\"4\n" +
+	"\x16PublishManifestRequest\x12\x1a\n" +
+	"\bmanifest\x18\x01 \x01(\fR\bmanifest\"\x19\n" +
+	"\x17PublishManifestResponse2p\n" +
 	"\n" +
 	"SecretsAPI\x12b\n" +
 	"\tGetSecret\x12).graphene.workerplane.v1.GetSecretRequest\x1a*.graphene.workerplane.v1.GetSecretResponse2\x8d\x01\n" +
@@ -518,7 +706,11 @@ const file_proto_workerplane_v1_workerplane_proto_rawDesc = "" +
 	"\x11PublishCapability\x121.graphene.workerplane.v1.PublishCapabilityRequest\x1a2.graphene.workerplane.v1.PublishCapabilityResponse2\xca\x01\n" +
 	"\bBlobsAPI\x12^\n" +
 	"\aPutBlob\x12'.graphene.workerplane.v1.PutBlobRequest\x1a(.graphene.workerplane.v1.PutBlobResponse(\x01\x12^\n" +
-	"\aGetBlob\x12'.graphene.workerplane.v1.GetBlobRequest\x1a(.graphene.workerplane.v1.GetBlobResponse0\x01BHZFgithub.com/graphene-ci/pipeline/pkg/proto/workerplane/v1;workerplanev1b\x06proto3"
+	"\aGetBlob\x12'.graphene.workerplane.v1.GetBlobRequest\x1a(.graphene.workerplane.v1.GetBlobResponse0\x012`\n" +
+	"\tEventsAPI\x12S\n" +
+	"\x04Emit\x12$.graphene.workerplane.v1.EmitRequest\x1a%.graphene.workerplane.v1.EmitResponse2\x83\x01\n" +
+	"\vManifestAPI\x12t\n" +
+	"\x0fPublishManifest\x12/.graphene.workerplane.v1.PublishManifestRequest\x1a0.graphene.workerplane.v1.PublishManifestResponseBHZFgithub.com/graphene-ci/pipeline/pkg/proto/workerplane/v1;workerplanev1b\x06proto3"
 
 var (
 	file_proto_workerplane_v1_workerplane_proto_rawDescOnce sync.Once
@@ -532,7 +724,7 @@ func file_proto_workerplane_v1_workerplane_proto_rawDescGZIP() []byte {
 	return file_proto_workerplane_v1_workerplane_proto_rawDescData
 }
 
-var file_proto_workerplane_v1_workerplane_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_proto_workerplane_v1_workerplane_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_proto_workerplane_v1_workerplane_proto_goTypes = []any{
 	(*GetSecretRequest)(nil),          // 0: graphene.workerplane.v1.GetSecretRequest
 	(*GetSecretResponse)(nil),         // 1: graphene.workerplane.v1.GetSecretResponse
@@ -543,24 +735,32 @@ var file_proto_workerplane_v1_workerplane_proto_goTypes = []any{
 	(*PutBlobResponse)(nil),           // 6: graphene.workerplane.v1.PutBlobResponse
 	(*GetBlobRequest)(nil),            // 7: graphene.workerplane.v1.GetBlobRequest
 	(*GetBlobResponse)(nil),           // 8: graphene.workerplane.v1.GetBlobResponse
-	nil,                               // 9: graphene.workerplane.v1.Capability.LabelsEntry
+	(*EmitRequest)(nil),               // 9: graphene.workerplane.v1.EmitRequest
+	(*EmitResponse)(nil),              // 10: graphene.workerplane.v1.EmitResponse
+	(*PublishManifestRequest)(nil),    // 11: graphene.workerplane.v1.PublishManifestRequest
+	(*PublishManifestResponse)(nil),   // 12: graphene.workerplane.v1.PublishManifestResponse
+	nil,                               // 13: graphene.workerplane.v1.Capability.LabelsEntry
 }
 var file_proto_workerplane_v1_workerplane_proto_depIdxs = []int32{
-	9, // 0: graphene.workerplane.v1.Capability.labels:type_name -> graphene.workerplane.v1.Capability.LabelsEntry
-	2, // 1: graphene.workerplane.v1.PublishCapabilityRequest.capability:type_name -> graphene.workerplane.v1.Capability
-	0, // 2: graphene.workerplane.v1.SecretsAPI.GetSecret:input_type -> graphene.workerplane.v1.GetSecretRequest
-	3, // 3: graphene.workerplane.v1.CapabilitiesAPI.PublishCapability:input_type -> graphene.workerplane.v1.PublishCapabilityRequest
-	5, // 4: graphene.workerplane.v1.BlobsAPI.PutBlob:input_type -> graphene.workerplane.v1.PutBlobRequest
-	7, // 5: graphene.workerplane.v1.BlobsAPI.GetBlob:input_type -> graphene.workerplane.v1.GetBlobRequest
-	1, // 6: graphene.workerplane.v1.SecretsAPI.GetSecret:output_type -> graphene.workerplane.v1.GetSecretResponse
-	4, // 7: graphene.workerplane.v1.CapabilitiesAPI.PublishCapability:output_type -> graphene.workerplane.v1.PublishCapabilityResponse
-	6, // 8: graphene.workerplane.v1.BlobsAPI.PutBlob:output_type -> graphene.workerplane.v1.PutBlobResponse
-	8, // 9: graphene.workerplane.v1.BlobsAPI.GetBlob:output_type -> graphene.workerplane.v1.GetBlobResponse
-	6, // [6:10] is the sub-list for method output_type
-	2, // [2:6] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	13, // 0: graphene.workerplane.v1.Capability.labels:type_name -> graphene.workerplane.v1.Capability.LabelsEntry
+	2,  // 1: graphene.workerplane.v1.PublishCapabilityRequest.capability:type_name -> graphene.workerplane.v1.Capability
+	0,  // 2: graphene.workerplane.v1.SecretsAPI.GetSecret:input_type -> graphene.workerplane.v1.GetSecretRequest
+	3,  // 3: graphene.workerplane.v1.CapabilitiesAPI.PublishCapability:input_type -> graphene.workerplane.v1.PublishCapabilityRequest
+	5,  // 4: graphene.workerplane.v1.BlobsAPI.PutBlob:input_type -> graphene.workerplane.v1.PutBlobRequest
+	7,  // 5: graphene.workerplane.v1.BlobsAPI.GetBlob:input_type -> graphene.workerplane.v1.GetBlobRequest
+	9,  // 6: graphene.workerplane.v1.EventsAPI.Emit:input_type -> graphene.workerplane.v1.EmitRequest
+	11, // 7: graphene.workerplane.v1.ManifestAPI.PublishManifest:input_type -> graphene.workerplane.v1.PublishManifestRequest
+	1,  // 8: graphene.workerplane.v1.SecretsAPI.GetSecret:output_type -> graphene.workerplane.v1.GetSecretResponse
+	4,  // 9: graphene.workerplane.v1.CapabilitiesAPI.PublishCapability:output_type -> graphene.workerplane.v1.PublishCapabilityResponse
+	6,  // 10: graphene.workerplane.v1.BlobsAPI.PutBlob:output_type -> graphene.workerplane.v1.PutBlobResponse
+	8,  // 11: graphene.workerplane.v1.BlobsAPI.GetBlob:output_type -> graphene.workerplane.v1.GetBlobResponse
+	10, // 12: graphene.workerplane.v1.EventsAPI.Emit:output_type -> graphene.workerplane.v1.EmitResponse
+	12, // 13: graphene.workerplane.v1.ManifestAPI.PublishManifest:output_type -> graphene.workerplane.v1.PublishManifestResponse
+	8,  // [8:14] is the sub-list for method output_type
+	2,  // [2:8] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_proto_workerplane_v1_workerplane_proto_init() }
@@ -574,9 +774,9 @@ func file_proto_workerplane_v1_workerplane_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_workerplane_v1_workerplane_proto_rawDesc), len(file_proto_workerplane_v1_workerplane_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   14,
 			NumExtensions: 0,
-			NumServices:   3,
+			NumServices:   5,
 		},
 		GoTypes:           file_proto_workerplane_v1_workerplane_proto_goTypes,
 		DependencyIndexes: file_proto_workerplane_v1_workerplane_proto_depIdxs,
