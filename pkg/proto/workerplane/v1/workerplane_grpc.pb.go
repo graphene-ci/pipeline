@@ -494,6 +494,7 @@ var EventsAPI_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	ManifestAPI_PublishManifest_FullMethodName = "/graphene.workerplane.v1.ManifestAPI/PublishManifest"
+	ManifestAPI_GetPipeline_FullMethodName     = "/graphene.workerplane.v1.ManifestAPI/GetPipeline"
 )
 
 // ManifestAPIClient is the client API for ManifestAPI service.
@@ -501,9 +502,13 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // ManifestAPI records what a pipeline binary IS: published on every
-// worker start, deduplicated by content server-side.
+// worker start and on every push, deduplicated by content server-side.
 type ManifestAPIClient interface {
 	PublishManifest(ctx context.Context, in *PublishManifestRequest, opts ...grpc.CallOption) (*PublishManifestResponse, error)
+	// GetPipeline reads the pipeline record: the current image and the
+	// last published manifest. A push compares its image against this to
+	// skip an unchanged publication.
+	GetPipeline(ctx context.Context, in *GetPipelineRequest, opts ...grpc.CallOption) (*GetPipelineResponse, error)
 }
 
 type manifestAPIClient struct {
@@ -524,14 +529,28 @@ func (c *manifestAPIClient) PublishManifest(ctx context.Context, in *PublishMani
 	return out, nil
 }
 
+func (c *manifestAPIClient) GetPipeline(ctx context.Context, in *GetPipelineRequest, opts ...grpc.CallOption) (*GetPipelineResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPipelineResponse)
+	err := c.cc.Invoke(ctx, ManifestAPI_GetPipeline_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ManifestAPIServer is the server API for ManifestAPI service.
 // All implementations must embed UnimplementedManifestAPIServer
 // for forward compatibility.
 //
 // ManifestAPI records what a pipeline binary IS: published on every
-// worker start, deduplicated by content server-side.
+// worker start and on every push, deduplicated by content server-side.
 type ManifestAPIServer interface {
 	PublishManifest(context.Context, *PublishManifestRequest) (*PublishManifestResponse, error)
+	// GetPipeline reads the pipeline record: the current image and the
+	// last published manifest. A push compares its image against this to
+	// skip an unchanged publication.
+	GetPipeline(context.Context, *GetPipelineRequest) (*GetPipelineResponse, error)
 	mustEmbedUnimplementedManifestAPIServer()
 }
 
@@ -544,6 +563,9 @@ type UnimplementedManifestAPIServer struct{}
 
 func (UnimplementedManifestAPIServer) PublishManifest(context.Context, *PublishManifestRequest) (*PublishManifestResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PublishManifest not implemented")
+}
+func (UnimplementedManifestAPIServer) GetPipeline(context.Context, *GetPipelineRequest) (*GetPipelineResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPipeline not implemented")
 }
 func (UnimplementedManifestAPIServer) mustEmbedUnimplementedManifestAPIServer() {}
 func (UnimplementedManifestAPIServer) testEmbeddedByValue()                     {}
@@ -584,6 +606,24 @@ func _ManifestAPI_PublishManifest_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ManifestAPI_GetPipeline_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPipelineRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ManifestAPIServer).GetPipeline(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ManifestAPI_GetPipeline_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ManifestAPIServer).GetPipeline(ctx, req.(*GetPipelineRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ManifestAPI_ServiceDesc is the grpc.ServiceDesc for ManifestAPI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -594,6 +634,202 @@ var ManifestAPI_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PublishManifest",
 			Handler:    _ManifestAPI_PublishManifest_Handler,
+		},
+		{
+			MethodName: "GetPipeline",
+			Handler:    _ManifestAPI_GetPipeline_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "proto/workerplane/v1/workerplane.proto",
+}
+
+const (
+	RunsAPI_StartRun_FullMethodName  = "/graphene.workerplane.v1.RunsAPI/StartRun"
+	RunsAPI_GetRun_FullMethodName    = "/graphene.workerplane.v1.RunsAPI/GetRun"
+	RunsAPI_RunResult_FullMethodName = "/graphene.workerplane.v1.RunsAPI/RunResult"
+)
+
+// RunsAPIClient is the client API for RunsAPI service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// RunsAPI starts and observes runs of THIS pipeline from its own
+// binary — the `run` subcommand. The management plane serves operators;
+// this door serves the user code itself, with the same run token that
+// authenticates the rest of the worker plane.
+type RunsAPIClient interface {
+	StartRun(ctx context.Context, in *StartRunRequest, opts ...grpc.CallOption) (*StartRunResponse, error)
+	GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*GetRunResponse, error)
+	// RunResult waits for the run to finish and returns its typed result
+	// as JSON.
+	RunResult(ctx context.Context, in *RunResultRequest, opts ...grpc.CallOption) (*RunResultResponse, error)
+}
+
+type runsAPIClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewRunsAPIClient(cc grpc.ClientConnInterface) RunsAPIClient {
+	return &runsAPIClient{cc}
+}
+
+func (c *runsAPIClient) StartRun(ctx context.Context, in *StartRunRequest, opts ...grpc.CallOption) (*StartRunResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartRunResponse)
+	err := c.cc.Invoke(ctx, RunsAPI_StartRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runsAPIClient) GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*GetRunResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRunResponse)
+	err := c.cc.Invoke(ctx, RunsAPI_GetRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runsAPIClient) RunResult(ctx context.Context, in *RunResultRequest, opts ...grpc.CallOption) (*RunResultResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunResultResponse)
+	err := c.cc.Invoke(ctx, RunsAPI_RunResult_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RunsAPIServer is the server API for RunsAPI service.
+// All implementations must embed UnimplementedRunsAPIServer
+// for forward compatibility.
+//
+// RunsAPI starts and observes runs of THIS pipeline from its own
+// binary — the `run` subcommand. The management plane serves operators;
+// this door serves the user code itself, with the same run token that
+// authenticates the rest of the worker plane.
+type RunsAPIServer interface {
+	StartRun(context.Context, *StartRunRequest) (*StartRunResponse, error)
+	GetRun(context.Context, *GetRunRequest) (*GetRunResponse, error)
+	// RunResult waits for the run to finish and returns its typed result
+	// as JSON.
+	RunResult(context.Context, *RunResultRequest) (*RunResultResponse, error)
+	mustEmbedUnimplementedRunsAPIServer()
+}
+
+// UnimplementedRunsAPIServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedRunsAPIServer struct{}
+
+func (UnimplementedRunsAPIServer) StartRun(context.Context, *StartRunRequest) (*StartRunResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartRun not implemented")
+}
+func (UnimplementedRunsAPIServer) GetRun(context.Context, *GetRunRequest) (*GetRunResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRun not implemented")
+}
+func (UnimplementedRunsAPIServer) RunResult(context.Context, *RunResultRequest) (*RunResultResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunResult not implemented")
+}
+func (UnimplementedRunsAPIServer) mustEmbedUnimplementedRunsAPIServer() {}
+func (UnimplementedRunsAPIServer) testEmbeddedByValue()                 {}
+
+// UnsafeRunsAPIServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to RunsAPIServer will
+// result in compilation errors.
+type UnsafeRunsAPIServer interface {
+	mustEmbedUnimplementedRunsAPIServer()
+}
+
+func RegisterRunsAPIServer(s grpc.ServiceRegistrar, srv RunsAPIServer) {
+	// If the following call panics, it indicates UnimplementedRunsAPIServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&RunsAPI_ServiceDesc, srv)
+}
+
+func _RunsAPI_StartRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartRunRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RunsAPIServer).StartRun(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RunsAPI_StartRun_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RunsAPIServer).StartRun(ctx, req.(*StartRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RunsAPI_GetRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRunRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RunsAPIServer).GetRun(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RunsAPI_GetRun_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RunsAPIServer).GetRun(ctx, req.(*GetRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RunsAPI_RunResult_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunResultRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RunsAPIServer).RunResult(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RunsAPI_RunResult_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RunsAPIServer).RunResult(ctx, req.(*RunResultRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// RunsAPI_ServiceDesc is the grpc.ServiceDesc for RunsAPI service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var RunsAPI_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "graphene.workerplane.v1.RunsAPI",
+	HandlerType: (*RunsAPIServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "StartRun",
+			Handler:    _RunsAPI_StartRun_Handler,
+		},
+		{
+			MethodName: "GetRun",
+			Handler:    _RunsAPI_GetRun_Handler,
+		},
+		{
+			MethodName: "RunResult",
+			Handler:    _RunsAPI_RunResult_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

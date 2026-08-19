@@ -577,7 +577,11 @@ type PublishManifestRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Manifest is graphene.manifest.v1.Manifest as protojson — kept as
 	// bytes so the worker plane needs no cross-file proto import.
-	Manifest      []byte `protobuf:"bytes,1,opt,name=manifest,proto3" json:"manifest,omitempty"`
+	Manifest []byte `protobuf:"bytes,1,opt,name=manifest,proto3" json:"manifest,omitempty"`
+	// Image, when set, records the worker image this manifest was
+	// published from — a push sets it; a worker start leaves it empty to
+	// keep the record's current image.
+	Image         string `protobuf:"bytes,2,opt,name=image,proto3" json:"image,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -619,6 +623,13 @@ func (x *PublishManifestRequest) GetManifest() []byte {
 	return nil
 }
 
+func (x *PublishManifestRequest) GetImage() string {
+	if x != nil {
+		return x.Image
+	}
+	return ""
+}
+
 type PublishManifestResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -653,6 +664,422 @@ func (x *PublishManifestResponse) ProtoReflect() protoreflect.Message {
 // Deprecated: Use PublishManifestResponse.ProtoReflect.Descriptor instead.
 func (*PublishManifestResponse) Descriptor() ([]byte, []int) {
 	return file_proto_workerplane_v1_workerplane_proto_rawDescGZIP(), []int{12}
+}
+
+type GetPipelineRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PipelineId    string                 `protobuf:"bytes,1,opt,name=pipeline_id,json=pipelineId,proto3" json:"pipeline_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPipelineRequest) Reset() {
+	*x = GetPipelineRequest{}
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPipelineRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPipelineRequest) ProtoMessage() {}
+
+func (x *GetPipelineRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPipelineRequest.ProtoReflect.Descriptor instead.
+func (*GetPipelineRequest) Descriptor() ([]byte, []int) {
+	return file_proto_workerplane_v1_workerplane_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *GetPipelineRequest) GetPipelineId() string {
+	if x != nil {
+		return x.PipelineId
+	}
+	return ""
+}
+
+type GetPipelineResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Image is the current worker image of the pipeline; empty when the
+	// pipeline was never pushed.
+	Image string `protobuf:"bytes,1,opt,name=image,proto3" json:"image,omitempty"`
+	// Manifest is the last published manifest as protojson.
+	Manifest      []byte `protobuf:"bytes,2,opt,name=manifest,proto3" json:"manifest,omitempty"`
+	Digest        string `protobuf:"bytes,3,opt,name=digest,proto3" json:"digest,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPipelineResponse) Reset() {
+	*x = GetPipelineResponse{}
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPipelineResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPipelineResponse) ProtoMessage() {}
+
+func (x *GetPipelineResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPipelineResponse.ProtoReflect.Descriptor instead.
+func (*GetPipelineResponse) Descriptor() ([]byte, []int) {
+	return file_proto_workerplane_v1_workerplane_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *GetPipelineResponse) GetImage() string {
+	if x != nil {
+		return x.Image
+	}
+	return ""
+}
+
+func (x *GetPipelineResponse) GetManifest() []byte {
+	if x != nil {
+		return x.Manifest
+	}
+	return nil
+}
+
+func (x *GetPipelineResponse) GetDigest() string {
+	if x != nil {
+		return x.Digest
+	}
+	return ""
+}
+
+type StartRunRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	RunId string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	// Pipeline is the workflow type on the wire — the pipeline id.
+	Pipeline string `protobuf:"bytes,2,opt,name=pipeline,proto3" json:"pipeline,omitempty"`
+	// Params is the typed params value of the pipeline, as JSON.
+	Params []byte `protobuf:"bytes,3,opt,name=params,proto3" json:"params,omitempty"`
+	// Image makes the run MANAGED: the server launches the worker
+	// container itself.
+	Image         string            `protobuf:"bytes,4,opt,name=image,proto3" json:"image,omitempty"`
+	Labels        map[string]string `protobuf:"bytes,5,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartRunRequest) Reset() {
+	*x = StartRunRequest{}
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartRunRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartRunRequest) ProtoMessage() {}
+
+func (x *StartRunRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartRunRequest.ProtoReflect.Descriptor instead.
+func (*StartRunRequest) Descriptor() ([]byte, []int) {
+	return file_proto_workerplane_v1_workerplane_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *StartRunRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *StartRunRequest) GetPipeline() string {
+	if x != nil {
+		return x.Pipeline
+	}
+	return ""
+}
+
+func (x *StartRunRequest) GetParams() []byte {
+	if x != nil {
+		return x.Params
+	}
+	return nil
+}
+
+func (x *StartRunRequest) GetImage() string {
+	if x != nil {
+		return x.Image
+	}
+	return ""
+}
+
+func (x *StartRunRequest) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+type StartRunResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkflowId    string                 `protobuf:"bytes,1,opt,name=workflow_id,json=workflowId,proto3" json:"workflow_id,omitempty"`
+	TemporalRunId string                 `protobuf:"bytes,2,opt,name=temporal_run_id,json=temporalRunId,proto3" json:"temporal_run_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartRunResponse) Reset() {
+	*x = StartRunResponse{}
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartRunResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartRunResponse) ProtoMessage() {}
+
+func (x *StartRunResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartRunResponse.ProtoReflect.Descriptor instead.
+func (*StartRunResponse) Descriptor() ([]byte, []int) {
+	return file_proto_workerplane_v1_workerplane_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *StartRunResponse) GetWorkflowId() string {
+	if x != nil {
+		return x.WorkflowId
+	}
+	return ""
+}
+
+func (x *StartRunResponse) GetTemporalRunId() string {
+	if x != nil {
+		return x.TemporalRunId
+	}
+	return ""
+}
+
+type GetRunRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRunRequest) Reset() {
+	*x = GetRunRequest{}
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRunRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRunRequest) ProtoMessage() {}
+
+func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRunRequest.ProtoReflect.Descriptor instead.
+func (*GetRunRequest) Descriptor() ([]byte, []int) {
+	return file_proto_workerplane_v1_workerplane_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *GetRunRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+type GetRunResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRunResponse) Reset() {
+	*x = GetRunResponse{}
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRunResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRunResponse) ProtoMessage() {}
+
+func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRunResponse.ProtoReflect.Descriptor instead.
+func (*GetRunResponse) Descriptor() ([]byte, []int) {
+	return file_proto_workerplane_v1_workerplane_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *GetRunResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type RunResultRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunResultRequest) Reset() {
+	*x = RunResultRequest{}
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunResultRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunResultRequest) ProtoMessage() {}
+
+func (x *RunResultRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunResultRequest.ProtoReflect.Descriptor instead.
+func (*RunResultRequest) Descriptor() ([]byte, []int) {
+	return file_proto_workerplane_v1_workerplane_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *RunResultRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+type RunResultResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Result is the run's typed Result as JSON.
+	Result        []byte `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunResultResponse) Reset() {
+	*x = RunResultResponse{}
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunResultResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunResultResponse) ProtoMessage() {}
+
+func (x *RunResultResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workerplane_v1_workerplane_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunResultResponse.ProtoReflect.Descriptor instead.
+func (*RunResultResponse) Descriptor() ([]byte, []int) {
+	return file_proto_workerplane_v1_workerplane_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *RunResultResponse) GetResult() []byte {
+	if x != nil {
+		return x.Result
+	}
+	return nil
 }
 
 var File_proto_workerplane_v1_workerplane_proto protoreflect.FileDescriptor
@@ -695,10 +1122,39 @@ const file_proto_workerplane_v1_workerplane_proto_rawDesc = "" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
 	"\apayload\x18\x03 \x01(\fR\apayload\"\x0e\n" +
-	"\fEmitResponse\"4\n" +
+	"\fEmitResponse\"J\n" +
 	"\x16PublishManifestRequest\x12\x1a\n" +
-	"\bmanifest\x18\x01 \x01(\fR\bmanifest\"\x19\n" +
-	"\x17PublishManifestResponse2p\n" +
+	"\bmanifest\x18\x01 \x01(\fR\bmanifest\x12\x14\n" +
+	"\x05image\x18\x02 \x01(\tR\x05image\"\x19\n" +
+	"\x17PublishManifestResponse\"5\n" +
+	"\x12GetPipelineRequest\x12\x1f\n" +
+	"\vpipeline_id\x18\x01 \x01(\tR\n" +
+	"pipelineId\"_\n" +
+	"\x13GetPipelineResponse\x12\x14\n" +
+	"\x05image\x18\x01 \x01(\tR\x05image\x12\x1a\n" +
+	"\bmanifest\x18\x02 \x01(\fR\bmanifest\x12\x16\n" +
+	"\x06digest\x18\x03 \x01(\tR\x06digest\"\xfb\x01\n" +
+	"\x0fStartRunRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1a\n" +
+	"\bpipeline\x18\x02 \x01(\tR\bpipeline\x12\x16\n" +
+	"\x06params\x18\x03 \x01(\fR\x06params\x12\x14\n" +
+	"\x05image\x18\x04 \x01(\tR\x05image\x12L\n" +
+	"\x06labels\x18\x05 \x03(\v24.graphene.workerplane.v1.StartRunRequest.LabelsEntryR\x06labels\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"[\n" +
+	"\x10StartRunResponse\x12\x1f\n" +
+	"\vworkflow_id\x18\x01 \x01(\tR\n" +
+	"workflowId\x12&\n" +
+	"\x0ftemporal_run_id\x18\x02 \x01(\tR\rtemporalRunId\"&\n" +
+	"\rGetRunRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\"(\n" +
+	"\x0eGetRunResponse\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\")\n" +
+	"\x10RunResultRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\"+\n" +
+	"\x11RunResultResponse\x12\x16\n" +
+	"\x06result\x18\x01 \x01(\fR\x06result2p\n" +
 	"\n" +
 	"SecretsAPI\x12b\n" +
 	"\tGetSecret\x12).graphene.workerplane.v1.GetSecretRequest\x1a*.graphene.workerplane.v1.GetSecretResponse2\x8d\x01\n" +
@@ -708,9 +1164,14 @@ const file_proto_workerplane_v1_workerplane_proto_rawDesc = "" +
 	"\aPutBlob\x12'.graphene.workerplane.v1.PutBlobRequest\x1a(.graphene.workerplane.v1.PutBlobResponse(\x01\x12^\n" +
 	"\aGetBlob\x12'.graphene.workerplane.v1.GetBlobRequest\x1a(.graphene.workerplane.v1.GetBlobResponse0\x012`\n" +
 	"\tEventsAPI\x12S\n" +
-	"\x04Emit\x12$.graphene.workerplane.v1.EmitRequest\x1a%.graphene.workerplane.v1.EmitResponse2\x83\x01\n" +
+	"\x04Emit\x12$.graphene.workerplane.v1.EmitRequest\x1a%.graphene.workerplane.v1.EmitResponse2\xed\x01\n" +
 	"\vManifestAPI\x12t\n" +
-	"\x0fPublishManifest\x12/.graphene.workerplane.v1.PublishManifestRequest\x1a0.graphene.workerplane.v1.PublishManifestResponseBHZFgithub.com/graphene-ci/pipeline/pkg/proto/workerplane/v1;workerplanev1b\x06proto3"
+	"\x0fPublishManifest\x12/.graphene.workerplane.v1.PublishManifestRequest\x1a0.graphene.workerplane.v1.PublishManifestResponse\x12h\n" +
+	"\vGetPipeline\x12+.graphene.workerplane.v1.GetPipelineRequest\x1a,.graphene.workerplane.v1.GetPipelineResponse2\xa9\x02\n" +
+	"\aRunsAPI\x12_\n" +
+	"\bStartRun\x12(.graphene.workerplane.v1.StartRunRequest\x1a).graphene.workerplane.v1.StartRunResponse\x12Y\n" +
+	"\x06GetRun\x12&.graphene.workerplane.v1.GetRunRequest\x1a'.graphene.workerplane.v1.GetRunResponse\x12b\n" +
+	"\tRunResult\x12).graphene.workerplane.v1.RunResultRequest\x1a*.graphene.workerplane.v1.RunResultResponseBHZFgithub.com/graphene-ci/pipeline/pkg/proto/workerplane/v1;workerplanev1b\x06proto3"
 
 var (
 	file_proto_workerplane_v1_workerplane_proto_rawDescOnce sync.Once
@@ -724,7 +1185,7 @@ func file_proto_workerplane_v1_workerplane_proto_rawDescGZIP() []byte {
 	return file_proto_workerplane_v1_workerplane_proto_rawDescData
 }
 
-var file_proto_workerplane_v1_workerplane_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_proto_workerplane_v1_workerplane_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_proto_workerplane_v1_workerplane_proto_goTypes = []any{
 	(*GetSecretRequest)(nil),          // 0: graphene.workerplane.v1.GetSecretRequest
 	(*GetSecretResponse)(nil),         // 1: graphene.workerplane.v1.GetSecretResponse
@@ -739,28 +1200,46 @@ var file_proto_workerplane_v1_workerplane_proto_goTypes = []any{
 	(*EmitResponse)(nil),              // 10: graphene.workerplane.v1.EmitResponse
 	(*PublishManifestRequest)(nil),    // 11: graphene.workerplane.v1.PublishManifestRequest
 	(*PublishManifestResponse)(nil),   // 12: graphene.workerplane.v1.PublishManifestResponse
-	nil,                               // 13: graphene.workerplane.v1.Capability.LabelsEntry
+	(*GetPipelineRequest)(nil),        // 13: graphene.workerplane.v1.GetPipelineRequest
+	(*GetPipelineResponse)(nil),       // 14: graphene.workerplane.v1.GetPipelineResponse
+	(*StartRunRequest)(nil),           // 15: graphene.workerplane.v1.StartRunRequest
+	(*StartRunResponse)(nil),          // 16: graphene.workerplane.v1.StartRunResponse
+	(*GetRunRequest)(nil),             // 17: graphene.workerplane.v1.GetRunRequest
+	(*GetRunResponse)(nil),            // 18: graphene.workerplane.v1.GetRunResponse
+	(*RunResultRequest)(nil),          // 19: graphene.workerplane.v1.RunResultRequest
+	(*RunResultResponse)(nil),         // 20: graphene.workerplane.v1.RunResultResponse
+	nil,                               // 21: graphene.workerplane.v1.Capability.LabelsEntry
+	nil,                               // 22: graphene.workerplane.v1.StartRunRequest.LabelsEntry
 }
 var file_proto_workerplane_v1_workerplane_proto_depIdxs = []int32{
-	13, // 0: graphene.workerplane.v1.Capability.labels:type_name -> graphene.workerplane.v1.Capability.LabelsEntry
+	21, // 0: graphene.workerplane.v1.Capability.labels:type_name -> graphene.workerplane.v1.Capability.LabelsEntry
 	2,  // 1: graphene.workerplane.v1.PublishCapabilityRequest.capability:type_name -> graphene.workerplane.v1.Capability
-	0,  // 2: graphene.workerplane.v1.SecretsAPI.GetSecret:input_type -> graphene.workerplane.v1.GetSecretRequest
-	3,  // 3: graphene.workerplane.v1.CapabilitiesAPI.PublishCapability:input_type -> graphene.workerplane.v1.PublishCapabilityRequest
-	5,  // 4: graphene.workerplane.v1.BlobsAPI.PutBlob:input_type -> graphene.workerplane.v1.PutBlobRequest
-	7,  // 5: graphene.workerplane.v1.BlobsAPI.GetBlob:input_type -> graphene.workerplane.v1.GetBlobRequest
-	9,  // 6: graphene.workerplane.v1.EventsAPI.Emit:input_type -> graphene.workerplane.v1.EmitRequest
-	11, // 7: graphene.workerplane.v1.ManifestAPI.PublishManifest:input_type -> graphene.workerplane.v1.PublishManifestRequest
-	1,  // 8: graphene.workerplane.v1.SecretsAPI.GetSecret:output_type -> graphene.workerplane.v1.GetSecretResponse
-	4,  // 9: graphene.workerplane.v1.CapabilitiesAPI.PublishCapability:output_type -> graphene.workerplane.v1.PublishCapabilityResponse
-	6,  // 10: graphene.workerplane.v1.BlobsAPI.PutBlob:output_type -> graphene.workerplane.v1.PutBlobResponse
-	8,  // 11: graphene.workerplane.v1.BlobsAPI.GetBlob:output_type -> graphene.workerplane.v1.GetBlobResponse
-	10, // 12: graphene.workerplane.v1.EventsAPI.Emit:output_type -> graphene.workerplane.v1.EmitResponse
-	12, // 13: graphene.workerplane.v1.ManifestAPI.PublishManifest:output_type -> graphene.workerplane.v1.PublishManifestResponse
-	8,  // [8:14] is the sub-list for method output_type
-	2,  // [2:8] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	22, // 2: graphene.workerplane.v1.StartRunRequest.labels:type_name -> graphene.workerplane.v1.StartRunRequest.LabelsEntry
+	0,  // 3: graphene.workerplane.v1.SecretsAPI.GetSecret:input_type -> graphene.workerplane.v1.GetSecretRequest
+	3,  // 4: graphene.workerplane.v1.CapabilitiesAPI.PublishCapability:input_type -> graphene.workerplane.v1.PublishCapabilityRequest
+	5,  // 5: graphene.workerplane.v1.BlobsAPI.PutBlob:input_type -> graphene.workerplane.v1.PutBlobRequest
+	7,  // 6: graphene.workerplane.v1.BlobsAPI.GetBlob:input_type -> graphene.workerplane.v1.GetBlobRequest
+	9,  // 7: graphene.workerplane.v1.EventsAPI.Emit:input_type -> graphene.workerplane.v1.EmitRequest
+	11, // 8: graphene.workerplane.v1.ManifestAPI.PublishManifest:input_type -> graphene.workerplane.v1.PublishManifestRequest
+	13, // 9: graphene.workerplane.v1.ManifestAPI.GetPipeline:input_type -> graphene.workerplane.v1.GetPipelineRequest
+	15, // 10: graphene.workerplane.v1.RunsAPI.StartRun:input_type -> graphene.workerplane.v1.StartRunRequest
+	17, // 11: graphene.workerplane.v1.RunsAPI.GetRun:input_type -> graphene.workerplane.v1.GetRunRequest
+	19, // 12: graphene.workerplane.v1.RunsAPI.RunResult:input_type -> graphene.workerplane.v1.RunResultRequest
+	1,  // 13: graphene.workerplane.v1.SecretsAPI.GetSecret:output_type -> graphene.workerplane.v1.GetSecretResponse
+	4,  // 14: graphene.workerplane.v1.CapabilitiesAPI.PublishCapability:output_type -> graphene.workerplane.v1.PublishCapabilityResponse
+	6,  // 15: graphene.workerplane.v1.BlobsAPI.PutBlob:output_type -> graphene.workerplane.v1.PutBlobResponse
+	8,  // 16: graphene.workerplane.v1.BlobsAPI.GetBlob:output_type -> graphene.workerplane.v1.GetBlobResponse
+	10, // 17: graphene.workerplane.v1.EventsAPI.Emit:output_type -> graphene.workerplane.v1.EmitResponse
+	12, // 18: graphene.workerplane.v1.ManifestAPI.PublishManifest:output_type -> graphene.workerplane.v1.PublishManifestResponse
+	14, // 19: graphene.workerplane.v1.ManifestAPI.GetPipeline:output_type -> graphene.workerplane.v1.GetPipelineResponse
+	16, // 20: graphene.workerplane.v1.RunsAPI.StartRun:output_type -> graphene.workerplane.v1.StartRunResponse
+	18, // 21: graphene.workerplane.v1.RunsAPI.GetRun:output_type -> graphene.workerplane.v1.GetRunResponse
+	20, // 22: graphene.workerplane.v1.RunsAPI.RunResult:output_type -> graphene.workerplane.v1.RunResultResponse
+	13, // [13:23] is the sub-list for method output_type
+	3,  // [3:13] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_workerplane_v1_workerplane_proto_init() }
@@ -774,9 +1253,9 @@ func file_proto_workerplane_v1_workerplane_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_workerplane_v1_workerplane_proto_rawDesc), len(file_proto_workerplane_v1_workerplane_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   23,
 			NumExtensions: 0,
-			NumServices:   5,
+			NumServices:   6,
 		},
 		GoTypes:           file_proto_workerplane_v1_workerplane_proto_goTypes,
 		DependencyIndexes: file_proto_workerplane_v1_workerplane_proto_depIdxs,

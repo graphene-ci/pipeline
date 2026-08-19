@@ -91,15 +91,82 @@ message EmitRequest {
 message EmitResponse {}
 
 // ManifestAPI records what a pipeline binary IS: published on every
-// worker start, deduplicated by content server-side.
+// worker start and on every push, deduplicated by content server-side.
 service ManifestAPI {
   rpc PublishManifest(PublishManifestRequest) returns (PublishManifestResponse);
+  // GetPipeline reads the pipeline record: the current image and the
+  // last published manifest. A push compares its image against this to
+  // skip an unchanged publication.
+  rpc GetPipeline(GetPipelineRequest) returns (GetPipelineResponse);
 }
 
 message PublishManifestRequest {
   // Manifest is graphene.manifest.v1.Manifest as protojson — kept as
   // bytes so the worker plane needs no cross-file proto import.
   bytes manifest = 1;
+  // Image, when set, records the worker image this manifest was
+  // published from — a push sets it; a worker start leaves it empty to
+  // keep the record's current image.
+  string image = 2;
 }
 
 message PublishManifestResponse {}
+
+message GetPipelineRequest {
+  string pipeline_id = 1;
+}
+
+message GetPipelineResponse {
+  // Image is the current worker image of the pipeline; empty when the
+  // pipeline was never pushed.
+  string image = 1;
+  // Manifest is the last published manifest as protojson.
+  bytes manifest = 2;
+  string digest = 3;
+}
+
+// RunsAPI starts and observes runs of THIS pipeline from its own
+// binary — the `run` subcommand. The management plane serves operators;
+// this door serves the user code itself, with the same run token that
+// authenticates the rest of the worker plane.
+service RunsAPI {
+  rpc StartRun(StartRunRequest) returns (StartRunResponse);
+  rpc GetRun(GetRunRequest) returns (GetRunResponse);
+  // RunResult waits for the run to finish and returns its typed result
+  // as JSON.
+  rpc RunResult(RunResultRequest) returns (RunResultResponse);
+}
+
+message StartRunRequest {
+  string run_id = 1;
+  // Pipeline is the workflow type on the wire — the pipeline id.
+  string pipeline = 2;
+  // Params is the typed params value of the pipeline, as JSON.
+  bytes params = 3;
+  // Image makes the run MANAGED: the server launches the worker
+  // container itself.
+  string image = 4;
+  map<string, string> labels = 5;
+}
+
+message StartRunResponse {
+  string workflow_id = 1;
+  string temporal_run_id = 2;
+}
+
+message GetRunRequest {
+  string run_id = 1;
+}
+
+message GetRunResponse {
+  string status = 1;
+}
+
+message RunResultRequest {
+  string run_id = 1;
+}
+
+message RunResultResponse {
+  // Result is the run's typed Result as JSON.
+  bytes result = 1;
+}
