@@ -25,6 +25,20 @@ import (
 // container. Empty (exec runtime) means the process is on the machine.
 const EnvRoot = "GRAPHENE_MACHINE_ROOT"
 
+// EnvWorkspace names the per-(machine × run) work directory the agent
+// creates. SAME absolute path on the machine and in the container — a
+// path under it is valid for this process, for chrooted machine
+// scripts, and for the machine's docker daemon (volume binds, build
+// contexts) at once. Dies with the run container: keep results as
+// artifacts, not files.
+const EnvWorkspace = "GRAPHENE_WORKSPACE"
+
+// Workspace returns the run's work directory on this machine; empty
+// when the process runs outside an agent-hosted container.
+func Workspace() string {
+	return os.Getenv(EnvWorkspace)
+}
+
 // Root returns the machine filesystem's mount point, or "" when the
 // process runs directly on the machine.
 func Root() string {

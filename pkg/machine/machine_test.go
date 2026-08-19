@@ -53,3 +53,10 @@ func TestRelativeNameOnTheMachine(t *testing.T) {
 		t.Fatalf("unexpected lookup error: %v", cmd.Err)
 	}
 }
+
+func TestWorkspace(t *testing.T) {
+	t.Setenv(EnvWorkspace, "/var/lib/agent/work/run-1")
+	if Workspace() != "/var/lib/agent/work/run-1" {
+		t.Fatal("workspace must come from the env verbatim")
+	}
+}
