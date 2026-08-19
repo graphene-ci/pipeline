@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
+
+	temporalotel "go.temporal.io/sdk/contrib/opentelemetry"
 
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
@@ -16,6 +19,7 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/graphene-ci/pipeline/pkg/id"
+	"github.com/graphene-ci/pipeline/pkg/obs"
 	"github.com/graphene-ci/pipeline/pkg/wire"
 )
 
@@ -77,6 +81,23 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) e
 	if insecure, _ := strconv.ParseBool(os.Getenv(wire.EnvInsecure)); insecure {
 		copts.ConnectionOptions.TLSDisabled = true
 	}
+	// Observability: OTLP exporters at the same door, the graphene
+	// correlation attributes on every signal, the tracing interceptor
+	// spanning workflow and activities — all wired here, zero user code.
+	shutdownObs, err := obs.Setup(context.Background(), obs.FromEnv())
+	if err != nil {
+		return fmt.Errorf("observability: %w", err)
+	}
+	defer func() {
+		flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = shutdownObs(flushCtx)
+	}()
+	tracing, err := temporalotel.NewTracingInterceptor(temporalotel.TracerOptions{})
+	if err != nil {
+		return fmt.Errorf("tracing interceptor: %w", err)
+	}
+
 	c, err := client.Dial(copts)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
@@ -88,7 +109,7 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) e
 		w := worker.New(c, wire.RunQueue(runId), worker.Options{
 			// Guaranteed teardown: every exit path of the run workflow
 			// triggers the server's cleanup.
-			Interceptors: []interceptor.WorkerInterceptor{&cleanupInterceptor{}},
+			Interceptors: []interceptor.WorkerInterceptor{&cleanupInterceptor{}, tracing},
 		})
 		w.RegisterWorkflowWithOptions(wrap(pipelineId, fn), workflow.RegisterOptions{Name: string(pipelineId)})
 		if err := registerRecorded(w, c, rec); err != nil {
@@ -100,7 +121,9 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) e
 		if err != nil {
 			return fmt.Errorf("%s: %w", wire.EnvAgentId, err)
 		}
-		w := worker.New(c, wire.AgentRunQueue(agentId, runId), worker.Options{})
+		w := worker.New(c, wire.AgentRunQueue(agentId, runId), worker.Options{
+			Interceptors: []interceptor.WorkerInterceptor{tracing},
+		})
 		if err := registerRecorded(w, c, rec); err != nil {
 			return err
 		}
