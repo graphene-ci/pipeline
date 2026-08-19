@@ -16,7 +16,9 @@ import (
 	"strings"
 	"time"
 
+	retry "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/retry"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -195,15 +197,22 @@ func watchRun(ctx context.Context, runs workerplanev1.RunsAPIClient, runId strin
 }
 
 // dialDoor connects to the installation's single door with the
-// context's token.
+// context's token. Transient failures retry with backoff — a watch
+// must survive a blinking network.
 func dialDoor(cc cliconfig.Context) (*grpc.ClientConn, error) {
 	creds := credentials.NewTLS(nil)
 	if cc.Insecure {
 		creds = insecure.NewCredentials()
 	}
+	retryOpts := []retry.CallOption{
+		retry.WithMax(5),
+		retry.WithBackoff(retry.BackoffExponentialWithJitter(200*time.Millisecond, 0.2)),
+		retry.WithCodes(codes.Unavailable, codes.ResourceExhausted, codes.Aborted),
+	}
 	return grpc.NewClient(cc.Server,
 		grpc.WithTransportCredentials(creds),
 		grpc.WithPerRPCCredentials(cliBearer{token: cc.Token, insecure: cc.Insecure}),
+		grpc.WithUnaryInterceptor(retry.UnaryClientInterceptor(retryOpts...)),
 	)
 }
 
