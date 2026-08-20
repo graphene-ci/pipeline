@@ -44,7 +44,9 @@ func Build[P, R any](pipelineId string, activities, kinds []string) (*manifestpb
 // SchemaOf reflects a Go type into a schemapb schema. The type's JSON
 // shape is what travels, so json tags decide the field names.
 func SchemaOf(t reflect.Type, id *schemapb.SchemaIdentity) (*schemapb.Schema, error) {
-	root := schemapb.NewSchema(id)
+	// Coercion on: human input arrives as strings ("1h", "256") — the
+	// schema converts them itself on resolve.
+	root := schemapb.NewSchema(id).Coerce()
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
