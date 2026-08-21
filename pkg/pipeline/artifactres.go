@@ -13,6 +13,7 @@ import (
 
 	"github.com/graphene-ci/pipeline/pkg/artifact"
 	"github.com/graphene-ci/pipeline/pkg/id"
+	"github.com/graphene-ci/pipeline/pkg/machine"
 	"github.com/graphene-ci/pipeline/pkg/ref"
 	"github.com/graphene-ci/pipeline/pkg/wire"
 	"github.com/graphene-ci/pipeline/pkg/workerapi"
@@ -86,7 +87,9 @@ const (
 // uploadFileActivity reads a local file and puts it into the server's
 // blob store.
 func uploadFileActivity(ctx context.Context, path string) (ref.BlobRef, error) {
-	f, err := os.Open(path) //nolint:gosec // uploading the named file is the point
+	// The path names a MACHINE file; in an agent-hosted container the
+	// machine lives under the machine root.
+	f, err := os.Open(machine.Path(path)) //nolint:gosec // uploading the named file is the point
 	if err != nil {
 		return ref.BlobRef{}, err
 	}
