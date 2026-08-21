@@ -2,18 +2,37 @@
 // every graphene client tool: the pipeline binary's own subcommands
 // (push, run) and graphenectl. Named contexts live in one file under the
 // user's config directory — the project repository never carries tokens.
+//
+// Resolution order, kubeconfig-style:
+//   - the file: --config / GRAPHENE_CONFIG, else ~/.config/graphene/config.yaml;
+//   - the context: an explicit name, else GRAPHENE_CONTEXT, else `current`;
+//   - field overrides on top: GRAPHENE_ADDRESS, GRAPHENE_TOKEN,
+//     GRAPHENE_NAMESPACE, GRAPHENE_INSECURE — with a server and a token
+//     in the environment no file is needed at all (CI).
 package cliconfig
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
 
-// EnvContext overrides the current context name.
-const EnvContext = "GRAPHENE_CONTEXT"
+// Environment variables of the resolution chain. The field overrides
+// reuse the wire names the worker roles already speak — one vocabulary.
+const (
+	// EnvConfig points at the config file (kubeconfig's KUBECONFIG).
+	EnvConfig = "GRAPHENE_CONFIG"
+	// EnvContext overrides the current context name.
+	EnvContext = "GRAPHENE_CONTEXT"
+
+	envAddress   = "GRAPHENE_ADDRESS"
+	envToken     = "GRAPHENE_TOKEN" //nolint:gosec // the env var NAME, not a credential
+	envNamespace = "GRAPHENE_NAMESPACE"
+	envInsecure  = "GRAPHENE_INSECURE"
+)
 
 // Context is one named installation the tools talk to.
 type Context struct {
@@ -36,8 +55,12 @@ type Config struct {
 	Contexts map[string]Context `yaml:"contexts"`
 }
 
-// Path is the config file location.
+// Path is the config file location: the explicit override, else the
+// user config directory.
 func Path() (string, error) {
+	if p := os.Getenv(EnvConfig); p != "" {
+		return p, nil
+	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
@@ -52,7 +75,7 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	raw, err := os.ReadFile(path) //nolint:gosec // the fixed user-config path, not user input
+	raw, err := os.ReadFile(path) //nolint:gosec // the user's own config path
 	if os.IsNotExist(err) {
 		return Config{}, nil
 	}
@@ -66,8 +89,27 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
+// Save writes the config back where Path points, creating the
+// directory on first use. The file holds tokens: 0600.
+func Save(cfg Config) error {
+	path, err := Path()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	raw, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, raw, 0o600)
+}
+
 // Resolve picks the context: the explicit name, else EnvContext, else
-// the file's current. The name is reported back for messages.
+// the file's current — then lays the environment field overrides on
+// top. With GRAPHENE_ADDRESS and GRAPHENE_TOKEN set, no file and no
+// context are needed: the environment IS the context (named "env").
 func Resolve(explicit string) (Context, string, error) {
 	cfg, err := Load()
 	if err != nil {
@@ -80,16 +122,40 @@ func Resolve(explicit string) (Context, string, error) {
 	if name == "" {
 		name = cfg.Current
 	}
-	if name == "" {
-		path, _ := Path()
-		return Context{}, "", fmt.Errorf("no context: set `current` in %s or pass --context", path)
-	}
-	ctx, ok := cfg.Contexts[name]
-	if !ok {
+	ctx, found := cfg.Contexts[name]
+	if !found && name != "" && explicit != "" {
+		// An explicitly named context MUST exist; the env cannot
+		// silently paper over a typo.
 		return Context{}, "", fmt.Errorf("context %q is not defined", name)
 	}
-	if ctx.Server == "" {
-		return Context{}, "", fmt.Errorf("context %q has no server", name)
+	overlaid := overlay(ctx)
+	if overlaid.Server == "" {
+		path, _ := Path()
+		return Context{}, "", fmt.Errorf(
+			"no connection: set `current` in %s, pass --context, or set %s and %s",
+			path, envAddress, envToken)
 	}
-	return ctx, name, nil
+	if !found {
+		name = "env"
+	}
+	return overlaid, name, nil
+}
+
+// overlay lays the environment field overrides over a context.
+func overlay(ctx Context) Context {
+	if v := os.Getenv(envAddress); v != "" {
+		ctx.Server = v
+	}
+	if v := os.Getenv(envToken); v != "" {
+		ctx.Token = v
+	}
+	if v := os.Getenv(envNamespace); v != "" {
+		ctx.Namespace = v
+	}
+	if v := os.Getenv(envInsecure); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			ctx.Insecure = b
+		}
+	}
+	return ctx
 }
