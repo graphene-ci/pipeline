@@ -20,4 +20,28 @@ message Manifest {
   repeated string activities = 4;
   // Kinds are the entity kinds the pipeline's libraries declare.
   repeated string kinds = 5;
+  // Triggers declared on the pipeline; the server applies them on
+  // publish — the code is the source of truth, a removed trigger is
+  // unapplied by the next push.
+  repeated Trigger triggers = 6;
+  // Concurrency policy for AUTOMATIC starts: "queue" (default),
+  // "cancel-previous", "parallel".
+  string concurrency = 7;
+}
+
+message Trigger {
+  // Kind: "cron" | "webhook".
+  string kind = 1;
+  // Name identifies the trigger; webhooks are addressed by it
+  // (/hooks/{ns}/{pipeline}/{name}). Crons name their history events.
+  string name = 2;
+  // Spec is the cron expression (cron only).
+  string spec = 3;
+  // SecretName names the HMAC/token secret in the installation's store
+  // (webhook only).
+  string secret_name = 4;
+  // Params is the fixed typed-params JSON this trigger starts runs
+  // with; a webhook's request body lands in the reserved "event" field
+  // on top.
+  bytes params = 5;
 }

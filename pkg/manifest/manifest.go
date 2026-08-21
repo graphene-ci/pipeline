@@ -18,8 +18,12 @@ import (
 	manifestpb "github.com/graphene-ci/pipeline/pkg/proto/manifest/v1"
 )
 
-// Build assembles the manifest of one pipeline.
-func Build[P, R any](pipelineId string, activities, kinds []string) (*manifestpb.Manifest, error) {
+// Build assembles the manifest of one pipeline. Triggers and the
+// concurrency policy are pass-through declarations from the Main
+// options; nil/empty mean none and the default policy.
+func Build[P, R any](pipelineId string, activities, kinds []string,
+	triggers []*manifestpb.Trigger, concurrency string,
+) (*manifestpb.Manifest, error) {
 	params, err := SchemaOf(reflect.TypeFor[P](),
 		schemapb.ID("graphene", schemapb.SchemaName(pipelineId+"-params"), schemapb.Ver(0, 1, 0)))
 	if err != nil {
@@ -38,6 +42,8 @@ func Build[P, R any](pipelineId string, activities, kinds []string) (*manifestpb
 		ResultSchema: result,
 		Activities:   activities,
 		Kinds:        kinds,
+		Triggers:     triggers,
+		Concurrency:  concurrency,
 	}, nil
 }
 
