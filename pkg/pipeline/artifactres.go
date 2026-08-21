@@ -26,6 +26,7 @@ import (
 func NewArtifact(ctx Context, name string, src artifact.Source, opts ...ResourceOption) Resource[ArtifactState] {
 	self := ref.OwnerRef("artifact/" + name)
 	if ctx.Recording() {
+		ctx.RecordDeclare(self, BuildResourceOptions(ctx, opts))
 		return NewResource[ArtifactState](ctx, self, nil)
 	}
 	o := BuildResourceOptions(ctx, opts)
@@ -68,6 +69,7 @@ func NewArtifact(ctx Context, name string, src artifact.Source, opts ...Resource
 // verified state with the blob ref to fetch.
 func AttachArtifact(ctx Context, name string) Attached[ArtifactState] {
 	if ctx.Recording() {
+		ctx.RecordStep("attach", "artifact/"+name, "", "foreign")
 		return NewAttached[ArtifactState](ctx, nil)
 	}
 	fut := workflow.ExecuteActivity(serverCtx(ctx), wire.AttachArtifactActivity, id.ArtifactId(name))

@@ -27,6 +27,41 @@ message Manifest {
   // Concurrency policy for AUTOMATIC starts: "queue" (default),
   // "cancel-previous", "parallel".
   string concurrency = 7;
+  // Graph is the plan of the optimistic zero path.
+  Graph graph = 8;
+}
+
+// Graph is the pipeline's PLAN: what the recording pass saw walking
+// the OPTIMISTIC ZERO PATH once — declared resources with their tree
+// edges and the ordered steps with their data dependencies. Branches
+// on runtime values are invisible by construction: this is the shape
+// of the honest common path, not an execution guarantee.
+message Graph {
+  repeated GraphNode nodes = 1;
+  repeated GraphStep steps = 2;
+}
+
+message GraphNode {
+  // Ref addresses the declared resource ("kind/id").
+  string ref = 1;
+  // Parent is the declared owner; empty means the run.
+  string parent = 2;
+  // Children are existing resources the declaration claims.
+  repeated string children = 3;
+}
+
+message GraphStep {
+  // Op: "declare" | "activity" | "activity-all" | "attach" | "transfer".
+  string op = 1;
+  // Subject: the resource ref or the activity name.
+  string subject = 2;
+  // Agent executing an activity ("agent/x", or "<selection>" for a
+  // fan-out).
+  string agent = 3;
+  // Note: the guarantee ("at-most-once"), the transfer target, ...
+  string note = 4;
+  // Deps are resources whose Ready output fed this step.
+  repeated string deps = 5;
 }
 
 message Trigger {

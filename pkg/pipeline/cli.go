@@ -39,13 +39,15 @@ func runCLI[P any](pipelineId id.PipelineId, manifestJSON []byte) (handled bool,
 		return true, cmdPush(pipelineId, manifestJSON, os.Args[2:])
 	case "run":
 		return true, cmdRun[P](pipelineId, manifestJSON, os.Args[2:])
+	case "plan":
+		return true, cmdPlan(manifestJSON, os.Args[2:])
 	case "dev":
 		// TODO(dev): the inplace dev loop — embedded dev contour.
 		return true, fmt.Errorf("dev is not implemented yet")
 	default:
 		// Unknown words are not roles — fail loudly instead of silently
 		// serving.
-		return true, fmt.Errorf("unknown command %q (want push, run or dev)", os.Args[1])
+		return true, fmt.Errorf("unknown command %q (want push, run, plan or dev)", os.Args[1])
 	}
 }
 

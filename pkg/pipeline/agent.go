@@ -72,6 +72,7 @@ func AttachAgent(ctx Context, name string, opts ...ResourceOption) AttachedAgent
 	agentId := id.AgentId(name)
 	h := AttachedAgent{agentId: agentId}
 	if ctx.Recording() {
+		ctx.RecordStep("attach", "agent/"+name, "", "foreign")
 		h.Attached = NewAttached[AgentState](ctx, nil)
 		return h
 	}
@@ -126,6 +127,7 @@ func NewAgent(ctx Context, name string, opts ...ResourceOption) AgentHandle {
 	self := ref.OwnerRef("agent/" + name)
 	h := AgentHandle{agentId: agentId, ctx: ctx}
 	if ctx.Recording() {
+		ctx.RecordDeclare(self, BuildResourceOptions(ctx, opts))
 		h.Resource = NewResource[AgentState](ctx, self, nil)
 		return h
 	}
@@ -146,6 +148,7 @@ func NewAgentViaSSH(ctx Context, name string, install SSHInstall, opts ...Resour
 	self := ref.OwnerRef("agent/" + name)
 	h := AgentHandle{agentId: agentId, ctx: ctx}
 	if ctx.Recording() {
+		ctx.RecordDeclare(self, BuildResourceOptions(ctx, opts))
 		h.Resource = NewResource[AgentState](ctx, self, nil)
 		return h
 	}

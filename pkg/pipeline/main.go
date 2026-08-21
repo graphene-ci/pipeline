@@ -111,7 +111,7 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error), o
 	// pass. GRAPHENE_MANIFEST=1 dumps it and exits — the no-server way
 	// to inspect a pipeline.
 	m, err := manifest.Build[P, R](string(pipelineId), rec.activityNames(), rec.kindNames(),
-		declaredTriggers, mc.concurrency)
+		declaredTriggers, mc.concurrency, rec.planGraph())
 	if err != nil {
 		return fmt.Errorf("manifest: %w", err)
 	}

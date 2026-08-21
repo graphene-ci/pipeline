@@ -98,6 +98,7 @@ func ActivityAll[Res any](ctx pipeline.Context, targets []Target, call Call[Res]
 	var zero []Res
 	if ctx.Recording() {
 		ctx.RecordActivity(call.name, call.fn)
+		ctx.RecordStep("activity-all", call.name, "<selection>", guaranteeNote(opts))
 		return zero, nil
 	}
 	futures := make([]workflow.Future, len(targets))
@@ -122,6 +123,7 @@ func Activity[Res any](ctx pipeline.Context, target Target, call Call[Res], opts
 	var zero Res
 	if ctx.Recording() {
 		ctx.RecordActivity(call.name, call.fn)
+		ctx.RecordStep("activity", call.name, "agent/"+string(target.AgentId()), guaranteeNote(opts))
 		return zero, nil
 	}
 	fut := dispatch(ctx, target, call, opts)
@@ -174,4 +176,16 @@ func (u unknownClassifier) Get(ctx workflow.Context, valuePtr any) error {
 		return errors.Join(pipeline.ErrUnknown, err)
 	}
 	return err
+}
+
+// guaranteeNote renders the execution guarantee for the plan.
+func guaranteeNote(opts []Option) string {
+	o := options{}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	if o.guarantee == AtMostOnce {
+		return "at-most-once"
+	}
+	return ""
 }

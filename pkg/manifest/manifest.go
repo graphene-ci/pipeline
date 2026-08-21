@@ -22,7 +22,7 @@ import (
 // concurrency policy are pass-through declarations from the Main
 // options; nil/empty mean none and the default policy.
 func Build[P, R any](pipelineId string, activities, kinds []string,
-	triggers []*manifestpb.Trigger, concurrency string,
+	triggers []*manifestpb.Trigger, concurrency string, graph *manifestpb.Graph,
 ) (*manifestpb.Manifest, error) {
 	params, err := SchemaOf(reflect.TypeFor[P](),
 		schemapb.ID("graphene", schemapb.SchemaName(pipelineId+"-params"), schemapb.Ver(0, 1, 0)))
@@ -44,6 +44,7 @@ func Build[P, R any](pipelineId string, activities, kinds []string,
 		Kinds:        kinds,
 		Triggers:     triggers,
 		Concurrency:  concurrency,
+		Graph:        graph,
 	}, nil
 }
 
