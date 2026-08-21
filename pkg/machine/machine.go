@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // EnvRoot names the environment variable the agent sets in the runc
@@ -63,9 +64,14 @@ func Path(machinePath string) string {
 func Command(ctx context.Context, name string, args ...string) *exec.Cmd {
 	root := Root()
 	if root == "" {
-		return exec.CommandContext(ctx, name, args...) //nolint:gosec // running caller commands on the machine is this package's purpose
+		cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // running caller commands on the machine is this package's purpose
+		// Daemons a script leaves behind inherit the output pipes;
+		// without a WaitDelay CombinedOutput waits for THEIR exit.
+		cmd.WaitDelay = 10 * time.Second
+		return cmd
 	}
 	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // see above
+	cmd.WaitDelay = 10 * time.Second
 	// The parent must not try PATH lookup in the container fs — the
 	// kernel resolves name inside the chroot at execve.
 	cmd.Err = nil
