@@ -163,20 +163,14 @@ func cmdRun[P any](pipelineId id.PipelineId, manifestJSON []byte, args []string)
 	return watchRun(ctx, runs, runId)
 }
 
-// watchRun follows the run to a terminal status, prints the typed
-// result on success, and mirrors the outcome in the exit code.
+// watchRun follows the run over the server's watch stream to a
+// terminal status, prints the typed result on success, and mirrors the
+// outcome in the exit code. A broken stream reconnects with backoff —
+// a blinking network must not lose the watch.
 func watchRun(ctx context.Context, runs workerplanev1.RunsAPIClient, runId string) error {
 	last := ""
-	for {
-		resp, err := runs.GetRun(ctx, &workerplanev1.GetRunRequest{RunId: runId})
-		if err != nil {
-			return fmt.Errorf("watch: %w", err)
-		}
-		status := resp.GetStatus()
-		if status != last {
-			fmt.Fprintf(os.Stderr, "run %s: %s\n", runId, status)
-			last = status
-		}
+	for attempt := 0; ; attempt++ {
+		status, streamErr := followStatuses(ctx, runs, runId, &last)
 		switch status {
 		case "Completed":
 			res, err := runs.RunResult(ctx, &workerplanev1.RunResultRequest{RunId: runId})
@@ -188,10 +182,33 @@ func watchRun(ctx context.Context, runs workerplanev1.RunsAPIClient, runId strin
 		case "Failed", "Canceled", "Terminated", "TimedOut":
 			return fmt.Errorf("run %s: %s", runId, strings.ToLower(status))
 		}
+		// The stream broke before a terminal status — reconnect.
+		if attempt >= 10 {
+			return fmt.Errorf("watch: %w", streamErr)
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(2 * time.Second):
+		case <-time.After(min(time.Duration(attempt+1)*time.Second, 10*time.Second)):
+		}
+	}
+}
+
+// followStatuses drains one watch stream, printing transitions;
+// returns the last seen status and the stream's ending error.
+func followStatuses(ctx context.Context, runs workerplanev1.RunsAPIClient, runId string, last *string) (string, error) {
+	stream, err := runs.WatchRun(ctx, &workerplanev1.WatchRunRequest{RunId: runId})
+	if err != nil {
+		return *last, err
+	}
+	for {
+		ev, err := stream.Recv()
+		if err != nil {
+			return *last, err
+		}
+		if s := ev.GetStatus(); s != *last {
+			fmt.Fprintf(os.Stderr, "run %s: %s\n", runId, s)
+			*last = s
 		}
 	}
 }

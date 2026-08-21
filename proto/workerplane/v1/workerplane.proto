@@ -132,9 +132,20 @@ message GetPipelineResponse {
 service RunsAPI {
   rpc StartRun(StartRunRequest) returns (StartRunResponse);
   rpc GetRun(GetRunRequest) returns (GetRunResponse);
+  // WatchRun streams the run's status transitions until a terminal
+  // one; the first message carries the current status immediately.
+  rpc WatchRun(WatchRunRequest) returns (stream WatchRunEvent);
   // RunResult waits for the run to finish and returns its typed result
   // as JSON.
   rpc RunResult(RunResultRequest) returns (RunResultResponse);
+}
+
+message WatchRunRequest {
+  string run_id = 1;
+}
+
+message WatchRunEvent {
+  string status = 1;
 }
 
 message StartRunRequest {
