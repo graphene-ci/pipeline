@@ -10,6 +10,8 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/graphene-ci/pipeline/pkg/id"
+	manifestpb "github.com/graphene-ci/pipeline/pkg/proto/manifest/v1"
+	"github.com/graphene-ci/pipeline/pkg/ref"
 )
 
 // Context is the pipeline's workflow context. It carries ONLY what does
@@ -87,6 +89,53 @@ func (c Context) RecordKind(name string) {
 	c.rec.kinds[name] = true
 }
 
+// RecordDeclare notes a resource declaration for the PLAN: the node,
+// its tree edges from the options, and one plan step consuming the
+// Ready-reads since the previous step. Constructors call it in their
+// recording branch; outside the pass it is a no-op.
+func (c Context) RecordDeclare(self ref.OwnerRef, o ResourceOptions) {
+	if c.rec == nil {
+		return
+	}
+	c.rec.mu.Lock()
+	defer c.rec.mu.Unlock()
+	children := make([]string, 0, len(o.Children))
+	for _, child := range o.Children {
+		children = append(children, string(child))
+	}
+	c.rec.nodes = append(c.rec.nodes, planNode{
+		Ref: string(self), Parent: string(o.Parent), Children: children,
+	})
+	c.rec.step("declare", string(self), "", "")
+}
+
+// RecordStep notes one plan step that is not a declaration — an
+// activity on an agent, a fan-out, a transfer. Recording pass only.
+func (c Context) RecordStep(op, subject, agent, note string) {
+	if c.rec == nil {
+		return
+	}
+	c.rec.mu.Lock()
+	defer c.rec.mu.Unlock()
+	c.rec.step(op, subject, agent, note)
+}
+
+// RecordUse notes that user code read a resource's Ready output — the
+// data edge feeding the NEXT plan step. Recording pass only.
+func (c Context) RecordUse(self ref.OwnerRef) {
+	if c.rec == nil {
+		return
+	}
+	c.rec.mu.Lock()
+	defer c.rec.mu.Unlock()
+	for _, dep := range c.rec.pending {
+		if dep == string(self) {
+			return
+		}
+	}
+	c.rec.pending = append(c.rec.pending, string(self))
+}
+
 // recorder collects what the registration pass discovers.
 type recorder struct {
 	mu          sync.Mutex
@@ -94,10 +143,56 @@ type recorder struct {
 	workerHooks []func(w worker.Worker, cl client.Client) error
 	kinds       map[string]bool
 	errs        []error
+
+	// The plan: declared nodes, ordered steps, and the Ready-reads
+	// accumulated since the last step (the next step's data deps).
+	nodes   []planNode
+	steps   []planStep
+	pending []string
+}
+
+// planNode is one declared resource with its tree edges.
+type planNode struct {
+	Ref      string
+	Parent   string
+	Children []string
+}
+
+// planStep is one ordered operation of the optimistic zero path.
+type planStep struct {
+	Op      string
+	Subject string
+	Agent   string
+	Note    string
+	Deps    []string
+}
+
+// step appends one plan step, consuming the pending data deps. The
+// caller holds the lock.
+func (r *recorder) step(op, subject, agent, note string) {
+	deps := r.pending
+	r.pending = nil
+	r.steps = append(r.steps, planStep{Op: op, Subject: subject, Agent: agent, Note: note, Deps: deps})
 }
 
 func newRecorder() *recorder {
 	return &recorder{activities: map[string]any{}, kinds: map[string]bool{}}
+}
+
+// planGraph renders the collected plan for the manifest.
+func (r *recorder) planGraph() *manifestpb.Graph {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	g := &manifestpb.Graph{}
+	for _, n := range r.nodes {
+		g.Nodes = append(g.Nodes, &manifestpb.GraphNode{Ref: n.Ref, Parent: n.Parent, Children: n.Children})
+	}
+	for _, st := range r.steps {
+		g.Steps = append(g.Steps, &manifestpb.GraphStep{
+			Op: st.Op, Subject: st.Subject, Agent: st.Agent, Note: st.Note, Deps: st.Deps,
+		})
+	}
+	return g
 }
 
 // activityNames lists the discovered wire names.

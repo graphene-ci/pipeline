@@ -50,6 +50,7 @@ func (r Resource[Out]) Ready(ctx Context) Out {
 func (r Resource[Out]) TryReady(ctx Context) (Out, error) {
 	if r.rec || r.fut == nil {
 		if ctx.Recording() {
+			ctx.RecordUse(r.self)
 			return optimisticZero[Out](), nil
 		}
 		var out Out

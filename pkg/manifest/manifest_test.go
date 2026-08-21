@@ -55,7 +55,7 @@ func TestSchemaOfShapes(t *testing.T) {
 func TestBuildManifest(t *testing.T) {
 	m, err := Build[testParams, struct {
 		Report string `json:"report"`
-	}]("perf-nightly", []string{"b", "a"}, []string{"vpc.network"}, nil, "")
+	}]("perf-nightly", []string{"b", "a"}, []string{"vpc.network"}, nil, "", nil)
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}

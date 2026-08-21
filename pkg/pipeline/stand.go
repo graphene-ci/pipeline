@@ -14,6 +14,7 @@ import (
 // keeps serving these resources until the last of them is gone.
 func ToStand(ctx Context, h Handle, opts ...TransferOption) {
 	if ctx.Recording() {
+		ctx.RecordStep("transfer", string(h.ResourceRef()), "", "to stand")
 		return
 	}
 	var o transferOptions
