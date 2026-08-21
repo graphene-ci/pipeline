@@ -37,7 +37,14 @@ type Manifest struct {
 	// Activities discovered by the recording pass (wire names, sorted).
 	Activities []string `protobuf:"bytes,4,rep,name=activities,proto3" json:"activities,omitempty"`
 	// Kinds are the entity kinds the pipeline's libraries declare.
-	Kinds         []string `protobuf:"bytes,5,rep,name=kinds,proto3" json:"kinds,omitempty"`
+	Kinds []string `protobuf:"bytes,5,rep,name=kinds,proto3" json:"kinds,omitempty"`
+	// Triggers declared on the pipeline; the server applies them on
+	// publish — the code is the source of truth, a removed trigger is
+	// unapplied by the next push.
+	Triggers []*Trigger `protobuf:"bytes,6,rep,name=triggers,proto3" json:"triggers,omitempty"`
+	// Concurrency policy for AUTOMATIC starts: "queue" (default),
+	// "cancel-previous", "parallel".
+	Concurrency   string `protobuf:"bytes,7,opt,name=concurrency,proto3" json:"concurrency,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -107,11 +114,110 @@ func (x *Manifest) GetKinds() []string {
 	return nil
 }
 
+func (x *Manifest) GetTriggers() []*Trigger {
+	if x != nil {
+		return x.Triggers
+	}
+	return nil
+}
+
+func (x *Manifest) GetConcurrency() string {
+	if x != nil {
+		return x.Concurrency
+	}
+	return ""
+}
+
+type Trigger struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Kind: "cron" | "webhook".
+	Kind string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	// Name identifies the trigger; webhooks are addressed by it
+	// (/hooks/{ns}/{pipeline}/{name}). Crons name their history events.
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// Spec is the cron expression (cron only).
+	Spec string `protobuf:"bytes,3,opt,name=spec,proto3" json:"spec,omitempty"`
+	// SecretName names the HMAC/token secret in the installation's store
+	// (webhook only).
+	SecretName string `protobuf:"bytes,4,opt,name=secret_name,json=secretName,proto3" json:"secret_name,omitempty"`
+	// Params is the fixed typed-params JSON this trigger starts runs
+	// with; a webhook's request body lands in the reserved "event" field
+	// on top.
+	Params        []byte `protobuf:"bytes,5,opt,name=params,proto3" json:"params,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Trigger) Reset() {
+	*x = Trigger{}
+	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Trigger) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Trigger) ProtoMessage() {}
+
+func (x *Trigger) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Trigger.ProtoReflect.Descriptor instead.
+func (*Trigger) Descriptor() ([]byte, []int) {
+	return file_proto_manifest_v1_manifest_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Trigger) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *Trigger) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Trigger) GetSpec() string {
+	if x != nil {
+		return x.Spec
+	}
+	return ""
+}
+
+func (x *Trigger) GetSecretName() string {
+	if x != nil {
+		return x.SecretName
+	}
+	return ""
+}
+
+func (x *Trigger) GetParams() []byte {
+	if x != nil {
+		return x.Params
+	}
+	return nil
+}
+
 var File_proto_manifest_v1_manifest_proto protoreflect.FileDescriptor
 
 const file_proto_manifest_v1_manifest_proto_rawDesc = "" +
 	"\n" +
-	" proto/manifest/v1/manifest.proto\x12\x14graphene.manifest.v1\x1a\x15schemapb/schema.proto\"\xcf\x01\n" +
+	" proto/manifest/v1/manifest.proto\x12\x14graphene.manifest.v1\x1a\x15schemapb/schema.proto\"\xac\x02\n" +
 	"\bManifest\x12\x1f\n" +
 	"\vpipeline_id\x18\x01 \x01(\tR\n" +
 	"pipelineId\x125\n" +
@@ -120,7 +226,16 @@ const file_proto_manifest_v1_manifest_proto_rawDesc = "" +
 	"\n" +
 	"activities\x18\x04 \x03(\tR\n" +
 	"activities\x12\x14\n" +
-	"\x05kinds\x18\x05 \x03(\tR\x05kindsBBZ@github.com/graphene-ci/pipeline/pkg/proto/manifest/v1;manifestpbb\x06proto3"
+	"\x05kinds\x18\x05 \x03(\tR\x05kinds\x129\n" +
+	"\btriggers\x18\x06 \x03(\v2\x1d.graphene.manifest.v1.TriggerR\btriggers\x12 \n" +
+	"\vconcurrency\x18\a \x01(\tR\vconcurrency\"~\n" +
+	"\aTrigger\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04spec\x18\x03 \x01(\tR\x04spec\x12\x1f\n" +
+	"\vsecret_name\x18\x04 \x01(\tR\n" +
+	"secretName\x12\x16\n" +
+	"\x06params\x18\x05 \x01(\fR\x06paramsBBZ@github.com/graphene-ci/pipeline/pkg/proto/manifest/v1;manifestpbb\x06proto3"
 
 var (
 	file_proto_manifest_v1_manifest_proto_rawDescOnce sync.Once
@@ -134,19 +249,21 @@ func file_proto_manifest_v1_manifest_proto_rawDescGZIP() []byte {
 	return file_proto_manifest_v1_manifest_proto_rawDescData
 }
 
-var file_proto_manifest_v1_manifest_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_proto_manifest_v1_manifest_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_proto_manifest_v1_manifest_proto_goTypes = []any{
 	(*Manifest)(nil),        // 0: graphene.manifest.v1.Manifest
-	(*schemapb.Schema)(nil), // 1: schemapb.Schema
+	(*Trigger)(nil),         // 1: graphene.manifest.v1.Trigger
+	(*schemapb.Schema)(nil), // 2: schemapb.Schema
 }
 var file_proto_manifest_v1_manifest_proto_depIdxs = []int32{
-	1, // 0: graphene.manifest.v1.Manifest.params_schema:type_name -> schemapb.Schema
-	1, // 1: graphene.manifest.v1.Manifest.result_schema:type_name -> schemapb.Schema
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	2, // 0: graphene.manifest.v1.Manifest.params_schema:type_name -> schemapb.Schema
+	2, // 1: graphene.manifest.v1.Manifest.result_schema:type_name -> schemapb.Schema
+	1, // 2: graphene.manifest.v1.Manifest.triggers:type_name -> graphene.manifest.v1.Trigger
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_manifest_v1_manifest_proto_init() }
@@ -160,7 +277,7 @@ func file_proto_manifest_v1_manifest_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_manifest_v1_manifest_proto_rawDesc), len(file_proto_manifest_v1_manifest_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

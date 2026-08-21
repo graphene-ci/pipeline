@@ -22,6 +22,7 @@ import (
 	"github.com/graphene-ci/pipeline/pkg/id"
 	"github.com/graphene-ci/pipeline/pkg/manifest"
 	"github.com/graphene-ci/pipeline/pkg/obs"
+	"github.com/graphene-ci/pipeline/pkg/trigger"
 	"github.com/graphene-ci/pipeline/pkg/wire"
 	"github.com/graphene-ci/pipeline/pkg/workerapi"
 )
@@ -46,15 +47,59 @@ import (
 // without a registration list. Declare activities unconditionally
 // (not behind branches on runtime values): the pass sees the zero-value
 // path.
-func Main[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) {
-	if err := serve(pipelineId, fn); err != nil {
+func Main[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error), opts ...MainOption) {
+	if err := serve(pipelineId, fn, opts...); err != nil {
 		fmt.Fprintln(os.Stderr, "pipeline:", err)
 		os.Exit(1)
 	}
 }
 
-func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) error {
+// MainOption declares pipeline-level properties: triggers and the
+// concurrency policy. They travel in the manifest; a push applies them.
+type MainOption func(*mainConfig)
+
+type mainConfig struct {
+	triggers    []trigger.T
+	concurrency string
+}
+
+// Concurrency policies for AUTOMATIC starts (triggers). A manual start
+// against a live run under Queue is refused with a clear error.
+const (
+	// Queue defers a firing until the live run finishes (at most one
+	// pending — cron semantics, no pile-up). The default.
+	Queue = "queue"
+	// CancelPrevious cancels the live run and starts the new one.
+	CancelPrevious = "cancel-previous"
+	// Parallel starts regardless.
+	Parallel = "parallel"
+)
+
+// WithTriggers declares what starts runs besides a human.
+func WithTriggers(triggers ...trigger.T) MainOption {
+	return func(c *mainConfig) { c.triggers = append(c.triggers, triggers...) }
+}
+
+// WithConcurrency sets the policy for automatic starts.
+func WithConcurrency(policy string) MainOption {
+	return func(c *mainConfig) { c.concurrency = policy }
+}
+
+func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error), opts ...MainOption) error {
 	if err := pipelineId.Validate(); err != nil {
+		return err
+	}
+	var mc mainConfig
+	for _, o := range opts {
+		o(&mc)
+	}
+	switch mc.concurrency {
+	case "", Queue, CancelPrevious, Parallel:
+	default:
+		return fmt.Errorf("concurrency %q: want %s, %s or %s", mc.concurrency, Queue, CancelPrevious, Parallel)
+	}
+	declaredTriggers, err := trigger.Build(mc.triggers)
+	if err != nil {
 		return err
 	}
 	rec, err := record(pipelineId, fn)
@@ -65,7 +110,8 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) e
 	// The manifest: what this binary IS, straight from the recording
 	// pass. GRAPHENE_MANIFEST=1 dumps it and exits — the no-server way
 	// to inspect a pipeline.
-	m, err := manifest.Build[P, R](string(pipelineId), rec.activityNames(), rec.kindNames())
+	m, err := manifest.Build[P, R](string(pipelineId), rec.activityNames(), rec.kindNames(),
+		declaredTriggers, mc.concurrency)
 	if err != nil {
 		return fmt.Errorf("manifest: %w", err)
 	}
