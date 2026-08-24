@@ -1,7 +1,9 @@
 package pipeline
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -101,6 +103,21 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error), o
 	declaredTriggers, err := trigger.Build(mc.triggers)
 	if err != nil {
 		return err
+	}
+	// A trigger starts THIS pipeline: its declared params must fit the
+	// pipeline's own params type. Checked here, where P is known — a
+	// drifted declaration fails the binary at startup/push, not the
+	// scheduled run.
+	for _, tr := range declaredTriggers {
+		if len(tr.GetParams()) == 0 {
+			continue
+		}
+		dec := json.NewDecoder(bytes.NewReader(tr.GetParams()))
+		dec.DisallowUnknownFields()
+		var p P
+		if err := dec.Decode(&p); err != nil {
+			return fmt.Errorf("trigger %q: params do not fit the pipeline's params type: %w", tr.GetName(), err)
+		}
 	}
 	rec, err := record(pipelineId, fn)
 	if err != nil {

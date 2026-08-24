@@ -16,6 +16,7 @@ import (
 	"github.com/gopherex/schemapb/go/schemapb"
 
 	manifestpb "github.com/graphene-ci/pipeline/pkg/proto/manifest/v1"
+	"github.com/graphene-ci/pipeline/pkg/ref"
 )
 
 // Build assembles the manifest of one pipeline. Triggers and the
@@ -73,9 +74,10 @@ func SchemaOf(t reflect.Type, id *schemapb.SchemaIdentity) (*schemapb.Schema, er
 }
 
 var (
-	timeType     = reflect.TypeFor[time.Time]()
-	durationType = reflect.TypeFor[time.Duration]()
-	rawJSONType  = reflect.TypeFor[json.RawMessage]()
+	timeType      = reflect.TypeFor[time.Time]()
+	durationType  = reflect.TypeFor[time.Duration]()
+	rawJSONType   = reflect.TypeFor[json.RawMessage]()
+	secretRefType = reflect.TypeFor[ref.SecretRef]()
 )
 
 func fieldsOf(t reflect.Type, visited map[reflect.Type]bool) ([]*schemapb.Schema_Field, error) {
@@ -128,6 +130,11 @@ func fieldOf(name string, t reflect.Type, required bool, visited map[reflect.Typ
 	}
 	var field *schemapb.Schema_Field
 	switch {
+	case t == secretRefType:
+		// A secret-typed param travels as the secret's NAME; the marker
+		// tells the door to check existence and a UI to render a picker,
+		// and keeps the name masked in validation errors.
+		field = schemapb.Str(fname).Secret().Done()
 	case t == timeType:
 		field = schemapb.Timestamp(fname).Done()
 	case t == durationType:

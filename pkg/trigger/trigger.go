@@ -63,9 +63,12 @@ func HookSecret(secretName string) Option {
 	return func(t *T) { t.pb.SecretName = secretName }
 }
 
-// Params fixes the typed params this trigger starts runs with; they
-// must satisfy the pipeline's schema like any submit.
-func Params(v any) Option {
+// Params fixes the typed params this trigger starts runs with — the
+// SAME type the pipeline function takes; pipeline.Main verifies the
+// match at startup, so a drifted declaration fails the binary, not the
+// 03:00 run. Environment values come from references (pipeline.Var,
+// pipeline.UseSecret), never literals.
+func Params[P any](v P) Option {
 	return func(t *T) {
 		raw, err := json.Marshal(v)
 		if err != nil {
