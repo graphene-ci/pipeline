@@ -36,6 +36,18 @@ func Secret(_ Context, name string) SecretRef {
 	return SecretRef{Name: id.SecretId(name)}
 }
 
+// UseSecret is Secret for declarations written OUTSIDE a run — trigger
+// params, specs. Same reference, no Context.
+func UseSecret(name string) SecretRef { return ref.Secret(name) }
+
+// Var references an installation VARIABLE — the visible sibling of a
+// secret: environment configuration (cloud folder ids, hosts) that does
+// not belong in pipeline code but is not sensitive. The door replaces
+// the placeholder with the variable's value when the run starts, BEFORE
+// schema validation — so a declaration (a cron's params) carries no
+// environment literals. Usable in any string-typed params field.
+func Var(name string) string { return "${var:" + name + "}" }
+
 // ErrUnknown reports that an at-most-once activity was dispatched but
 // its outcome could not be established: it may or may not have executed.
 // There is no silent retry — the caller decides by policy.
