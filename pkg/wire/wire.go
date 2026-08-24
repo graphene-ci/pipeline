@@ -112,6 +112,10 @@ type TransferResourceRequest struct {
 	// Keep bounds the stay under the new owner (stand TTL); zero keeps
 	// the resource until an explicit delete.
 	Keep time.Duration `json:"keep,omitempty"`
+	// From names who hands the resource over (the run's workflow id
+	// when the transfer comes from a run). The stand will not tear a
+	// holding down from under its still-running origin.
+	From string `json:"from,omitempty"`
 }
 
 // StandOwner is the owner reference of a pipeline's Stand — the
