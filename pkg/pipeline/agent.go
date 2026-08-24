@@ -161,6 +161,14 @@ func NewAgentViaSSH(ctx Context, name string, install SSHInstall, opts ...Resour
 	return h
 }
 
+// AdoptChildren hands existing resources to a new parent — the
+// library-author surface of pipeline.Children: a kind implemented
+// outside this package (k8slib and friends) claims the declared
+// children the same way the built-in kinds do.
+func AdoptChildren(ctx Context, parent ref.OwnerRef, children []ref.OwnerRef) {
+	adoptChildren(ctx, parent, children)
+}
+
 // adoptChildren hands existing resources to a new parent — blocking
 // server calls; the records already exist, the transfer is quick.
 func adoptChildren(ctx Context, parent ref.OwnerRef, children []ref.OwnerRef) {

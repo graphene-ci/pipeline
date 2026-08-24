@@ -21,12 +21,13 @@ import (
 // Kind is the entity kind name; workflow IDs are "artifact/{artifact-id}".
 const Kind = entity.KindName("artifact")
 
-// State extends the shared observable state with teardown data the
-// finalizer needs and the owned half of the tree.
+// State extends the shared observable state with the owned half of the
+// tree. The blob ref lives ONCE, in the embedded ArtifactState — a
+// second field with the same json tag shadowed it on decode and
+// Ready() returned a state without the blob.
 type State struct {
 	pipeline.ArtifactState
 	ownership.State
-	Blob *ref.BlobRef `json:"blob,omitempty"`
 }
 
 // Ops is the side-effect boundary: the blob store behind the records.
@@ -66,7 +67,6 @@ func initArtifact(ctx workflow.Context, spec pipeline.ArtifactSpec) (State, erro
 	}
 	st.Verified = true
 	st.ArtifactState.Blob = spec.Blob
-	st.Blob = &spec.Blob
 	ownership.Init(ctx, &st.State, spec.Owner)
 	return st, nil
 }
@@ -74,10 +74,10 @@ func initArtifact(ctx workflow.Context, spec pipeline.ArtifactSpec) (State, erro
 func finalizeArtifact(ctx workflow.Context, st *State) error {
 	// Deleting the record deletes the bytes: owned data dies with its
 	// record.
-	if st.Blob == nil {
+	if st.ArtifactState.Blob.Digest == "" {
 		return nil
 	}
-	return workflow.ExecuteActivity(activityCtx(ctx), DeleteActivity, artifactId(ctx), *st.Blob).Get(ctx, nil)
+	return workflow.ExecuteActivity(activityCtx(ctx), DeleteActivity, artifactId(ctx), st.ArtifactState.Blob).Get(ctx, nil)
 }
 
 func activityCtx(ctx workflow.Context) workflow.Context {

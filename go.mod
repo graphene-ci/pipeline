@@ -5,7 +5,7 @@ go 1.25.7
 require (
 	github.com/google/go-containerregistry v0.21.9
 	github.com/gopherex/schemapb/go v0.0.0-20260805100557-b08e53066d63
-	github.com/graphene-ci/temporal-entity v0.0.0-20260818135158-717d0ab8b0f7
+	github.com/graphene-ci/temporal-entity v0.0.0-20260824103956-3919c84e4abb
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.21.0

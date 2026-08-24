@@ -24,6 +24,7 @@ import (
 
 	"github.com/graphene-ci/pipeline/pkg/cliconfig"
 	"github.com/graphene-ci/pipeline/pkg/id"
+	"github.com/graphene-ci/pipeline/pkg/manifest"
 	workerplanev1 "github.com/graphene-ci/pipeline/pkg/proto/workerplane/v1"
 	"github.com/graphene-ci/pipeline/pkg/selfbuild"
 )
@@ -126,7 +127,7 @@ func cmdRun[P any](pipelineId id.PipelineId, manifestJSON []byte, args []string)
 		return fmt.Errorf("--dev is not implemented yet")
 	}
 
-	params, err := buildParams[P](*paramsJSON, setters)
+	params, err := buildParams[P](manifestJSON, *paramsJSON, setters)
 	if err != nil {
 		return err
 	}
@@ -338,13 +339,16 @@ func jsonName(f reflect.StructField) string {
 }
 
 // buildParams merges flag-set params into JSON; --params wins whole.
-func buildParams[P any](rawJSON string, setters []paramSetter) ([]byte, error) {
+// Raw JSON goes through the SAME schema normalization the door runs —
+// a value the door would coerce ("15m" into a duration) is never
+// refused client-side by a strict Go decode.
+func buildParams[P any](manifestJSON []byte, rawJSON string, setters []paramSetter) ([]byte, error) {
 	if rawJSON != "" {
-		var probe P
-		if err := json.Unmarshal([]byte(rawJSON), &probe); err != nil {
+		normalized, err := manifest.NormalizeParams(manifestJSON, []byte(rawJSON))
+		if err != nil {
 			return nil, fmt.Errorf("--params: %w", err)
 		}
-		return []byte(rawJSON), nil
+		return normalized, nil
 	}
 	m := map[string]any{}
 	for _, s := range setters {
