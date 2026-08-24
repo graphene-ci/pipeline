@@ -169,13 +169,26 @@ func AdoptChildren(ctx Context, parent ref.OwnerRef, children []ref.OwnerRef) {
 	adoptChildren(ctx, parent, children)
 }
 
-// adoptChildren hands existing resources to a new parent — blocking
-// server calls; the records already exist, the transfer is quick.
+// adoptChildren hands existing resources to a new parent. Fire-and-
+// forget ON PURPOSE: the child may still be INITIALIZING (an agent
+// waiting for its machine to connect), and an entity executes commands
+// only after init — a blocking claim here deadlocks the very flow that
+// is about to create that machine (run waits for the transfer, the
+// transfer waits for the agent's init, the agent waits for the vm the
+// run has not declared yet). The server activity retries until the
+// child can take the command; a terminal failure is logged — the tree
+// edge is advisory, the run's own resources fail loudly elsewhere.
 func adoptChildren(ctx Context, parent ref.OwnerRef, children []ref.OwnerRef) {
-	for _, child := range children {
-		req := wire.TransferResourceRequest{Resource: child, NewOwner: parent}
-		if err := workflow.ExecuteActivity(serverCtx(ctx), wire.TransferResourceActivity, req).Get(ctx, nil); err != nil {
-			panic(resourceFailure{err: err})
-		}
+	if len(children) == 0 {
+		return
 	}
+	workflow.Go(ctx, func(gctx workflow.Context) {
+		for _, child := range children {
+			req := wire.TransferResourceRequest{Resource: child, NewOwner: parent}
+			if err := workflow.ExecuteActivity(serverCtx(gctx), wire.TransferResourceActivity, req).Get(gctx, nil); err != nil {
+				workflow.GetLogger(gctx).Error("child claim failed",
+					"parent", string(parent), "child", string(child), "error", err)
+			}
+		}
+	})
 }
