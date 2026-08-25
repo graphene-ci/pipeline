@@ -69,7 +69,27 @@ func Push(ctx context.Context, opts Options) (string, bool, error) {
 		return "", false, err
 	}
 	defer func() { _ = os.RemoveAll(filepath.Dir(binPath)) }()
+	return pushBinary(ctx, binPath, digest, opts)
+}
 
+// PushBinary publishes a PREBUILT worker binary — the server-side
+// materialization path: the build ran in a runtime container, the
+// ko-style assembly and the content-tagged push are the same as the
+// binary's own Push.
+func PushBinary(ctx context.Context, binPath string, opts Options) (string, bool, error) {
+	f, err := os.Open(binPath) //nolint:gosec // publishing the named binary is the point
+	if err != nil {
+		return "", false, err
+	}
+	defer func() { _ = f.Close() }()
+	sum := sha256.New()
+	if _, err := io.Copy(sum, f); err != nil {
+		return "", false, err
+	}
+	return pushBinary(ctx, binPath, hex.EncodeToString(sum.Sum(nil)), opts)
+}
+
+func pushBinary(ctx context.Context, binPath, digest string, opts Options) (string, bool, error) {
 	// The tag is the binary content digest: same code — same tag —
 	// nothing to push.
 	repo := fmt.Sprintf("%s/%s/%s", opts.Registry, opts.Namespace, opts.PipelineId)
