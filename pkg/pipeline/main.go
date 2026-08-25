@@ -21,6 +21,8 @@ import (
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
 
+	entity "github.com/graphene-ci/temporal-entity/pkg/entity"
+
 	"github.com/graphene-ci/pipeline/pkg/id"
 	"github.com/graphene-ci/pipeline/pkg/manifest"
 	"github.com/graphene-ci/pipeline/pkg/obs"
@@ -231,21 +233,77 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error), o
 	}
 }
 
+// runDescribe is what a RUN answers to the record protocol: a run is
+// not an entity — it is the execution of the user's own workflow — but
+// it IS a node of the ownership tree, so it speaks the same describe
+// language and is read with the same verbs as everything else.
+type runDescribe[P, R any] struct {
+	Phase string      `json:"phase"`
+	Spec  runSpec[P]  `json:"spec"`
+	State runState[R] `json:"state"`
+	// Labels, PendingCommands and MarkedForDeletion complete the shape
+	// the door reads; a run has no queued commands of its own.
+	Labels            map[string]string `json:"labels,omitempty"`
+	PendingCommands   int32             `json:"pendingCommands"`
+	MarkedForDeletion bool              `json:"markedForDeletion"`
+}
+
+// runSpec is what the run WAS asked to do.
+type runSpec[P any] struct {
+	Pipeline string `json:"pipeline"`
+	Params   P      `json:"params"`
+	Image    string `json:"image,omitempty"`
+}
+
+// runState is what came of it.
+type runState[R any] struct {
+	Result *R     `json:"result,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
 // wrap adapts the pipeline function to a Temporal workflow: builds the
-// Context and translates resource failures (Ready panics) into the
-// workflow's error.
+// Context, answers the record protocol, and translates resource
+// failures (Ready panics) into the workflow's error.
 func wrap[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) func(workflow.Context, P) (R, error) {
 	return func(wctx workflow.Context, params P) (result R, err error) {
+		// The describe query answers while the run executes AND after it
+		// closed — that is how `get run/x` reads a finished run through
+		// the same door as every other record.
+		var finished bool
+		var outcome R
+		var failure string
+		_ = workflow.SetQueryHandler(wctx, entity.DescribeQueryName, func() (runDescribe[P, R], error) {
+			out := runDescribe[P, R]{
+				Phase: "running",
+				Spec:  runSpec[P]{Pipeline: string(pipelineId), Params: params, Image: os.Getenv(wire.EnvImage)},
+			}
+			switch {
+			case failure != "":
+				out.Phase, out.State.Error = "failed", failure
+			case finished:
+				out.Phase = "completed"
+				done := outcome
+				out.State.Result = &done
+			}
+			return out, nil
+		})
 		defer func() {
 			if p := recover(); p != nil {
 				if rf, ok := p.(resourceFailure); ok {
 					err = rf.err
+					failure = err.Error()
 					return
 				}
 				panic(p)
 			}
 		}()
-		return fn(Context{Context: wctx, pipelineId: pipelineId}, params)
+		result, err = fn(Context{Context: wctx, pipelineId: pipelineId}, params)
+		if err != nil {
+			failure = err.Error()
+			return result, err
+		}
+		outcome, finished = result, true
+		return result, err
 	}
 }
 
