@@ -12,6 +12,7 @@ var instruments struct {
 	sync.Mutex
 	counters   map[string]metric.Int64Counter
 	histograms map[string]metric.Float64Histogram
+	gauges     map[string]metric.Float64Gauge
 }
 
 // Count adds delta to a counter, stamped with the context's automatic

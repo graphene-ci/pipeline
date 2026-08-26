@@ -74,6 +74,13 @@ func ctxAttrs(ctx context.Context) []attribute.KeyValue {
 		out = append(out,
 			attribute.String(AttrActivity, info.ActivityType.Name),
 			attribute.Int(AttrAttempt, int(info.Attempt)))
+		// The namespace comes from the WORKFLOW the activity runs for,
+		// not from the process: one server process serves every
+		// namespace's bundles, and a resource-level stamp would brand
+		// them all with the process's own.
+		if info.WorkflowNamespace != "" {
+			out = append(out, attribute.String(AttrNamespace, info.WorkflowNamespace))
+		}
 	}
 	return out
 }

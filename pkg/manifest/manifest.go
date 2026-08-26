@@ -24,6 +24,7 @@ import (
 // options; nil/empty mean none and the default policy.
 func Build[P, R any](pipelineId string, activities, kinds []string,
 	triggers []*manifestpb.Trigger, concurrency string, graph *manifestpb.Graph,
+	kindDecls ...*manifestpb.KindDecl,
 ) (*manifestpb.Manifest, error) {
 	params, err := SchemaOf(reflect.TypeFor[P](),
 		schemapb.ID("graphene", schemapb.SchemaName(pipelineId+"-params"), schemapb.Ver(0, 1, 0)))
@@ -43,6 +44,7 @@ func Build[P, R any](pipelineId string, activities, kinds []string,
 		ResultSchema: result,
 		Activities:   activities,
 		Kinds:        kinds,
+		KindDecls:    kindDecls,
 		Triggers:     triggers,
 		Concurrency:  concurrency,
 		Graph:        graph,

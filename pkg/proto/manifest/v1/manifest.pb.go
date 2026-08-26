@@ -46,7 +46,12 @@ type Manifest struct {
 	// "cancel-previous", "parallel".
 	Concurrency string `protobuf:"bytes,7,opt,name=concurrency,proto3" json:"concurrency,omitempty"`
 	// Graph is the plan of the optimistic zero path.
-	Graph         *Graph `protobuf:"bytes,8,opt,name=graph,proto3" json:"graph,omitempty"`
+	Graph *Graph `protobuf:"bytes,8,opt,name=graph,proto3" json:"graph,omitempty"`
+	// KindDecls describe the brought kinds fully — the dictionary entry
+	// material: what a declaration looks like, which commands the kind
+	// answers, which observation dimensions it serves. `kinds` stays the
+	// quick name list; an entry here always has a name there.
+	KindDecls     []*KindDecl `protobuf:"bytes,9,rep,name=kind_decls,json=kindDecls,proto3" json:"kind_decls,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -137,6 +142,93 @@ func (x *Manifest) GetGraph() *Graph {
 	return nil
 }
 
+func (x *Manifest) GetKindDecls() []*KindDecl {
+	if x != nil {
+		return x.KindDecls
+	}
+	return nil
+}
+
+// KindDecl is one brought kind, described the way the installation's
+// dictionary wants it.
+type KindDecl struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Name        string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Description string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	// SpecSchema is the declaration's schema.
+	SpecSchema *schemapb.Schema    `protobuf:"bytes,3,opt,name=spec_schema,json=specSchema,proto3" json:"spec_schema,omitempty"`
+	Commands   []*KindDecl_Command `protobuf:"bytes,4,rep,name=commands,proto3" json:"commands,omitempty"`
+	// Dimensions: state, events, logs, metrics, traces.
+	Dimensions    []string `protobuf:"bytes,5,rep,name=dimensions,proto3" json:"dimensions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KindDecl) Reset() {
+	*x = KindDecl{}
+	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KindDecl) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KindDecl) ProtoMessage() {}
+
+func (x *KindDecl) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KindDecl.ProtoReflect.Descriptor instead.
+func (*KindDecl) Descriptor() ([]byte, []int) {
+	return file_proto_manifest_v1_manifest_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *KindDecl) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *KindDecl) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *KindDecl) GetSpecSchema() *schemapb.Schema {
+	if x != nil {
+		return x.SpecSchema
+	}
+	return nil
+}
+
+func (x *KindDecl) GetCommands() []*KindDecl_Command {
+	if x != nil {
+		return x.Commands
+	}
+	return nil
+}
+
+func (x *KindDecl) GetDimensions() []string {
+	if x != nil {
+		return x.Dimensions
+	}
+	return nil
+}
+
 // Graph is the pipeline's PLAN: what the recording pass saw walking
 // the OPTIMISTIC ZERO PATH once — declared resources with their tree
 // edges and the ordered steps with their data dependencies. Branches
@@ -152,7 +244,7 @@ type Graph struct {
 
 func (x *Graph) Reset() {
 	*x = Graph{}
-	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[1]
+	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -164,7 +256,7 @@ func (x *Graph) String() string {
 func (*Graph) ProtoMessage() {}
 
 func (x *Graph) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[1]
+	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -177,7 +269,7 @@ func (x *Graph) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Graph.ProtoReflect.Descriptor instead.
 func (*Graph) Descriptor() ([]byte, []int) {
-	return file_proto_manifest_v1_manifest_proto_rawDescGZIP(), []int{1}
+	return file_proto_manifest_v1_manifest_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Graph) GetNodes() []*GraphNode {
@@ -208,7 +300,7 @@ type GraphNode struct {
 
 func (x *GraphNode) Reset() {
 	*x = GraphNode{}
-	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[2]
+	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -220,7 +312,7 @@ func (x *GraphNode) String() string {
 func (*GraphNode) ProtoMessage() {}
 
 func (x *GraphNode) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[2]
+	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -233,7 +325,7 @@ func (x *GraphNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GraphNode.ProtoReflect.Descriptor instead.
 func (*GraphNode) Descriptor() ([]byte, []int) {
-	return file_proto_manifest_v1_manifest_proto_rawDescGZIP(), []int{2}
+	return file_proto_manifest_v1_manifest_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GraphNode) GetRef() string {
@@ -276,7 +368,7 @@ type GraphStep struct {
 
 func (x *GraphStep) Reset() {
 	*x = GraphStep{}
-	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[3]
+	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -288,7 +380,7 @@ func (x *GraphStep) String() string {
 func (*GraphStep) ProtoMessage() {}
 
 func (x *GraphStep) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[3]
+	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -301,7 +393,7 @@ func (x *GraphStep) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GraphStep.ProtoReflect.Descriptor instead.
 func (*GraphStep) Descriptor() ([]byte, []int) {
-	return file_proto_manifest_v1_manifest_proto_rawDescGZIP(), []int{3}
+	return file_proto_manifest_v1_manifest_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *GraphStep) GetOp() string {
@@ -361,7 +453,7 @@ type Trigger struct {
 
 func (x *Trigger) Reset() {
 	*x = Trigger{}
-	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[4]
+	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -373,7 +465,7 @@ func (x *Trigger) String() string {
 func (*Trigger) ProtoMessage() {}
 
 func (x *Trigger) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[4]
+	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -386,7 +478,7 @@ func (x *Trigger) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Trigger.ProtoReflect.Descriptor instead.
 func (*Trigger) Descriptor() ([]byte, []int) {
-	return file_proto_manifest_v1_manifest_proto_rawDescGZIP(), []int{4}
+	return file_proto_manifest_v1_manifest_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Trigger) GetKind() string {
@@ -424,11 +516,63 @@ func (x *Trigger) GetParams() []byte {
 	return nil
 }
 
+type KindDecl_Command struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	PayloadSchema *schemapb.Schema       `protobuf:"bytes,2,opt,name=payload_schema,json=payloadSchema,proto3" json:"payload_schema,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KindDecl_Command) Reset() {
+	*x = KindDecl_Command{}
+	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KindDecl_Command) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KindDecl_Command) ProtoMessage() {}
+
+func (x *KindDecl_Command) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_manifest_v1_manifest_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KindDecl_Command.ProtoReflect.Descriptor instead.
+func (*KindDecl_Command) Descriptor() ([]byte, []int) {
+	return file_proto_manifest_v1_manifest_proto_rawDescGZIP(), []int{1, 0}
+}
+
+func (x *KindDecl_Command) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *KindDecl_Command) GetPayloadSchema() *schemapb.Schema {
+	if x != nil {
+		return x.PayloadSchema
+	}
+	return nil
+}
+
 var File_proto_manifest_v1_manifest_proto protoreflect.FileDescriptor
 
 const file_proto_manifest_v1_manifest_proto_rawDesc = "" +
 	"\n" +
-	" proto/manifest/v1/manifest.proto\x12\x14graphene.manifest.v1\x1a\x15schemapb/schema.proto\"\xdf\x02\n" +
+	" proto/manifest/v1/manifest.proto\x12\x14graphene.manifest.v1\x1a\x15schemapb/schema.proto\"\x9e\x03\n" +
 	"\bManifest\x12\x1f\n" +
 	"\vpipeline_id\x18\x01 \x01(\tR\n" +
 	"pipelineId\x125\n" +
@@ -440,7 +584,21 @@ const file_proto_manifest_v1_manifest_proto_rawDesc = "" +
 	"\x05kinds\x18\x05 \x03(\tR\x05kinds\x129\n" +
 	"\btriggers\x18\x06 \x03(\v2\x1d.graphene.manifest.v1.TriggerR\btriggers\x12 \n" +
 	"\vconcurrency\x18\a \x01(\tR\vconcurrency\x121\n" +
-	"\x05graph\x18\b \x01(\v2\x1b.graphene.manifest.v1.GraphR\x05graph\"u\n" +
+	"\x05graph\x18\b \x01(\v2\x1b.graphene.manifest.v1.GraphR\x05graph\x12=\n" +
+	"\n" +
+	"kind_decls\x18\t \x03(\v2\x1e.graphene.manifest.v1.KindDeclR\tkindDecls\"\xaf\x02\n" +
+	"\bKindDecl\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\x121\n" +
+	"\vspec_schema\x18\x03 \x01(\v2\x10.schemapb.SchemaR\n" +
+	"specSchema\x12B\n" +
+	"\bcommands\x18\x04 \x03(\v2&.graphene.manifest.v1.KindDecl.CommandR\bcommands\x12\x1e\n" +
+	"\n" +
+	"dimensions\x18\x05 \x03(\tR\n" +
+	"dimensions\x1aV\n" +
+	"\aCommand\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x127\n" +
+	"\x0epayload_schema\x18\x02 \x01(\v2\x10.schemapb.SchemaR\rpayloadSchema\"u\n" +
 	"\x05Graph\x125\n" +
 	"\x05nodes\x18\x01 \x03(\v2\x1f.graphene.manifest.v1.GraphNodeR\x05nodes\x125\n" +
 	"\x05steps\x18\x02 \x03(\v2\x1f.graphene.manifest.v1.GraphStepR\x05steps\"Q\n" +
@@ -474,27 +632,33 @@ func file_proto_manifest_v1_manifest_proto_rawDescGZIP() []byte {
 	return file_proto_manifest_v1_manifest_proto_rawDescData
 }
 
-var file_proto_manifest_v1_manifest_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_proto_manifest_v1_manifest_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_proto_manifest_v1_manifest_proto_goTypes = []any{
-	(*Manifest)(nil),        // 0: graphene.manifest.v1.Manifest
-	(*Graph)(nil),           // 1: graphene.manifest.v1.Graph
-	(*GraphNode)(nil),       // 2: graphene.manifest.v1.GraphNode
-	(*GraphStep)(nil),       // 3: graphene.manifest.v1.GraphStep
-	(*Trigger)(nil),         // 4: graphene.manifest.v1.Trigger
-	(*schemapb.Schema)(nil), // 5: schemapb.Schema
+	(*Manifest)(nil),         // 0: graphene.manifest.v1.Manifest
+	(*KindDecl)(nil),         // 1: graphene.manifest.v1.KindDecl
+	(*Graph)(nil),            // 2: graphene.manifest.v1.Graph
+	(*GraphNode)(nil),        // 3: graphene.manifest.v1.GraphNode
+	(*GraphStep)(nil),        // 4: graphene.manifest.v1.GraphStep
+	(*Trigger)(nil),          // 5: graphene.manifest.v1.Trigger
+	(*KindDecl_Command)(nil), // 6: graphene.manifest.v1.KindDecl.Command
+	(*schemapb.Schema)(nil),  // 7: schemapb.Schema
 }
 var file_proto_manifest_v1_manifest_proto_depIdxs = []int32{
-	5, // 0: graphene.manifest.v1.Manifest.params_schema:type_name -> schemapb.Schema
-	5, // 1: graphene.manifest.v1.Manifest.result_schema:type_name -> schemapb.Schema
-	4, // 2: graphene.manifest.v1.Manifest.triggers:type_name -> graphene.manifest.v1.Trigger
-	1, // 3: graphene.manifest.v1.Manifest.graph:type_name -> graphene.manifest.v1.Graph
-	2, // 4: graphene.manifest.v1.Graph.nodes:type_name -> graphene.manifest.v1.GraphNode
-	3, // 5: graphene.manifest.v1.Graph.steps:type_name -> graphene.manifest.v1.GraphStep
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	7,  // 0: graphene.manifest.v1.Manifest.params_schema:type_name -> schemapb.Schema
+	7,  // 1: graphene.manifest.v1.Manifest.result_schema:type_name -> schemapb.Schema
+	5,  // 2: graphene.manifest.v1.Manifest.triggers:type_name -> graphene.manifest.v1.Trigger
+	2,  // 3: graphene.manifest.v1.Manifest.graph:type_name -> graphene.manifest.v1.Graph
+	1,  // 4: graphene.manifest.v1.Manifest.kind_decls:type_name -> graphene.manifest.v1.KindDecl
+	7,  // 5: graphene.manifest.v1.KindDecl.spec_schema:type_name -> schemapb.Schema
+	6,  // 6: graphene.manifest.v1.KindDecl.commands:type_name -> graphene.manifest.v1.KindDecl.Command
+	3,  // 7: graphene.manifest.v1.Graph.nodes:type_name -> graphene.manifest.v1.GraphNode
+	4,  // 8: graphene.manifest.v1.Graph.steps:type_name -> graphene.manifest.v1.GraphStep
+	7,  // 9: graphene.manifest.v1.KindDecl.Command.payload_schema:type_name -> schemapb.Schema
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_proto_manifest_v1_manifest_proto_init() }
@@ -508,7 +672,7 @@ func file_proto_manifest_v1_manifest_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_manifest_v1_manifest_proto_rawDesc), len(file_proto_manifest_v1_manifest_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
