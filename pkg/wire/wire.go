@@ -54,6 +54,7 @@ const (
 	// delete everything the run owns, stop its machine containers. The
 	// run worker calls it on every exit path of the run workflow.
 	RunCleanupActivity = "server.run.cleanup"
+
 	// TransferResourceActivity moves a resource (with its subtree) under
 	// a new owner. Ownership is given away, never taken: the caller must
 	// be the current owner's side.
@@ -122,6 +123,15 @@ type TransferResourceRequest struct {
 // permanent owner every pipeline has.
 func StandOwner(p id.PipelineId) ref.OwnerRef {
 	return ref.OwnerRef("stand/" + string(p))
+}
+
+// RunCleanupRequest is the run's last word: which run ended and HOW.
+// The outcome is what a downstream pipeline trigger fires on — the
+// cross-pipeline edge needs to know success from failure.
+type RunCleanupRequest struct {
+	RunId id.RunId `json:"runId"`
+	// Outcome: "success" | "failure" | "canceled".
+	Outcome string `json:"outcome"`
 }
 
 // EnsureContainerRequest asks the server to bring the worker container

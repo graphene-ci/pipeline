@@ -32,11 +32,18 @@ type cleanupInbound struct {
 
 func (c *cleanupInbound) ExecuteWorkflow(ctx workflow.Context, in *interceptor.ExecuteWorkflowInput) (any, error) {
 	result, err := c.Next.ExecuteWorkflow(ctx, in)
-	cleanup(ctx)
+	cleanup(ctx, err)
 	return result, err
 }
 
-func cleanup(ctx workflow.Context) {
+func cleanup(ctx workflow.Context, runErr error) {
+	outcome := "success"
+	switch {
+	case temporal.IsCanceledError(runErr), workflow.IsContinueAsNewError(runErr):
+		outcome = "canceled"
+	case runErr != nil:
+		outcome = "failure"
+	}
 	// The workflow may be ending through cancellation — a cancelled
 	// context cannot run activities, a disconnected one can.
 	dctx, _ := workflow.NewDisconnectedContext(ctx)
@@ -52,5 +59,8 @@ func cleanup(ctx workflow.Context) {
 	})
 	// A cleanup failure must not mask the run's own result; the activity
 	// retries hard before giving up, and the error is visible in history.
-	_ = workflow.ExecuteActivity(actx, wire.RunCleanupActivity, id.RunId(strings.TrimPrefix(workflow.GetInfo(ctx).WorkflowExecution.ID, "run/"))).Get(dctx, nil)
+	_ = workflow.ExecuteActivity(actx, wire.RunCleanupActivity, wire.RunCleanupRequest{
+		RunId:   id.RunId(strings.TrimPrefix(workflow.GetInfo(ctx).WorkflowExecution.ID, "run/")),
+		Outcome: outcome,
+	}).Get(dctx, nil)
 }
