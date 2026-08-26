@@ -13,6 +13,7 @@ import (
 	"context"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/interceptor"
 )
@@ -61,6 +62,12 @@ func (a *activityInbound) ExecuteActivity(ctx context.Context, in *interceptor.E
 	info := activity.GetInfo(ctx)
 	if Entity(ctx) == "" && info.WorkflowExecution.ID != "" {
 		ctx = WithEntity(ctx, info.WorkflowExecution.ID)
+	}
+	// The Temporal OTel interceptor opened this activity's span before
+	// us (install order puts tracing OUTSIDE obs); the span itself must
+	// carry the subject, or a record's Trace dimension cannot find it.
+	if span := trace.SpanFromContext(ctx); span.SpanContext().IsValid() {
+		span.SetAttributes(Str(AttrEntity, Entity(ctx)))
 	}
 	contour := Str("contour", a.contour)
 	if info.Attempt > 1 {
