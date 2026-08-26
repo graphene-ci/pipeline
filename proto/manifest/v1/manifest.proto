@@ -29,6 +29,27 @@ message Manifest {
   string concurrency = 7;
   // Graph is the plan of the optimistic zero path.
   Graph graph = 8;
+  // KindDecls describe the brought kinds fully — the dictionary entry
+  // material: what a declaration looks like, which commands the kind
+  // answers, which observation dimensions it serves. `kinds` stays the
+  // quick name list; an entry here always has a name there.
+  repeated KindDecl kind_decls = 9;
+}
+
+// KindDecl is one brought kind, described the way the installation's
+// dictionary wants it.
+message KindDecl {
+  string name = 1;
+  string description = 2;
+  // SpecSchema is the declaration's schema.
+  schemapb.Schema spec_schema = 3;
+  message Command {
+    string name = 1;
+    schemapb.Schema payload_schema = 2;
+  }
+  repeated Command commands = 4;
+  // Dimensions: state, events, logs, metrics, traces.
+  repeated string dimensions = 5;
 }
 
 // Graph is the pipeline's PLAN: what the recording pass saw walking

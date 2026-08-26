@@ -1,15 +1,19 @@
 package pipeline
 
 import (
+	"reflect"
+	"sort"
 	"strings"
 	"sync"
 
+	schemapb "github.com/gopherex/schemapb/go/schemapb"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/graphene-ci/pipeline/pkg/id"
+	"github.com/graphene-ci/pipeline/pkg/manifest"
 	manifestpb "github.com/graphene-ci/pipeline/pkg/proto/manifest/v1"
 	"github.com/graphene-ci/pipeline/pkg/ref"
 )
@@ -89,6 +93,39 @@ func (c Context) RecordKind(name string) {
 	c.rec.kinds[name] = true
 }
 
+// KindCommand is one command of a brought kind, for the dictionary.
+type KindCommand struct {
+	Name string
+	// Payload is the Go type of the command's payload; nil for a bare
+	// command.
+	Payload reflect.Type
+}
+
+// RecordKindInfo describes a brought kind FULLY — the installation's
+// dictionary entry: what a declaration looks like, which commands it
+// answers, which observation dimensions it serves. A library that only
+// calls RecordKind still works; its dictionary entry just says less.
+func (c Context) RecordKindInfo(name, description string, spec reflect.Type, dimensions []string, cmds ...KindCommand) {
+	if c.rec == nil {
+		return
+	}
+	c.RecordKind(name)
+	c.rec.mu.Lock()
+	defer c.rec.mu.Unlock()
+	if c.rec.kindDecls == nil {
+		c.rec.kindDecls = map[string]kindDecl{}
+	}
+	c.rec.kindDecls[name] = kindDecl{description: description, spec: spec, dimensions: dimensions, commands: cmds}
+}
+
+// kindDecl is the recorder's note of one described kind.
+type kindDecl struct {
+	description string
+	spec        reflect.Type
+	dimensions  []string
+	commands    []KindCommand
+}
+
 // RecordDeclare notes a resource declaration for the PLAN: the node,
 // its tree edges from the options, and one plan step consuming the
 // Ready-reads since the previous step. Constructors call it in their
@@ -142,6 +179,7 @@ type recorder struct {
 	activities  map[string]any
 	workerHooks []func(w worker.Worker, cl client.Client) error
 	kinds       map[string]bool
+	kindDecls   map[string]kindDecl
 	errs        []error
 
 	// The plan: declared nodes, ordered steps, and the Ready-reads
@@ -202,6 +240,38 @@ func (r *recorder) activityNames() []string {
 	out := make([]string, 0, len(r.activities))
 	for name := range r.activities {
 		out = append(out, name)
+	}
+	return out
+}
+
+// kindDecls renders the described kinds as manifest material.
+func (r *recorder) kindDeclList() []*manifestpb.KindDecl {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	names := make([]string, 0, len(r.kindDecls))
+	for name := range r.kindDecls {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]*manifestpb.KindDecl, 0, len(names))
+	for _, name := range names {
+		d := r.kindDecls[name]
+		decl := &manifestpb.KindDecl{Name: name, Description: d.description, Dimensions: d.dimensions}
+		if d.spec != nil {
+			if schema, err := manifest.SchemaOf(d.spec, schemapb.ID("graphene", schemapb.SchemaName(name+"-spec"), schemapb.Ver(0, 1, 0))); err == nil {
+				decl.SpecSchema = schema
+			}
+		}
+		for _, cmd := range d.commands {
+			c := &manifestpb.KindDecl_Command{Name: cmd.Name}
+			if cmd.Payload != nil {
+				if schema, err := manifest.SchemaOf(cmd.Payload, schemapb.ID("graphene", schemapb.SchemaName(name+"-"+cmd.Name), schemapb.Ver(0, 1, 0))); err == nil {
+					c.PayloadSchema = schema
+				}
+			}
+			decl.Commands = append(decl.Commands, c)
+		}
+		out = append(out, decl)
 	}
 	return out
 }

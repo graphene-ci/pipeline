@@ -10,6 +10,7 @@ package trigger
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	manifestpb "github.com/graphene-ci/pipeline/pkg/proto/manifest/v1"
 )
@@ -35,6 +36,42 @@ func Cron(spec string, opts ...Option) T {
 		t.fail(fmt.Errorf("cron needs a spec"))
 	}
 	return t
+}
+
+// Upstream declares a CROSS-PIPELINE trigger: this pipeline fires when
+// another one's run finishes. The industry's two shapes both reduce to
+// this edge — GitHub's workflow_run and GitLab's pipeline-subscription
+// both mean "when THAT pipeline completes (with this outcome), start
+// me". The spec is "<pipeline>:<outcome>", outcome one of "success"
+// (default), "failure", "any". The upstream run's identity arrives in
+// the reserved "event" params field, so the downstream can read what
+// triggered it.
+func Upstream(pipeline string, opts ...Option) T {
+	t := T{pb: &manifestpb.Trigger{Kind: "pipeline", Name: "after-" + pipeline, Spec: pipeline + ":success"}}
+	for _, o := range opts {
+		o(&t)
+	}
+	if pipeline == "" {
+		t.fail(fmt.Errorf("an upstream trigger names a pipeline"))
+	}
+	return t
+}
+
+// OnOutcome refines an Upstream trigger: "success", "failure", "any".
+func OnOutcome(outcome string) Option {
+	return func(t *T) {
+		if t.pb.GetKind() != "pipeline" {
+			t.fail(fmt.Errorf("OnOutcome applies to Upstream triggers"))
+			return
+		}
+		name, _, _ := strings.Cut(t.pb.GetSpec(), ":")
+		switch outcome {
+		case "success", "failure", "any":
+			t.pb.Spec = name + ":" + outcome
+		default:
+			t.fail(fmt.Errorf("outcome %q: want success, failure or any", outcome))
+		}
+	}
 }
 
 // Webhook declares an HTTP entry: POST /hooks/{ns}/{pipeline}/{name}
