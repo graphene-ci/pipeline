@@ -208,8 +208,9 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error), o
 		}()
 		w := worker.New(c, wire.RunQueue(runId), worker.Options{
 			// Guaranteed teardown: every exit path of the run workflow
-			// triggers the server's cleanup.
-			Interceptors: []interceptor.WorkerInterceptor{&cleanupInterceptor{}, tracing},
+			// triggers the server's cleanup. The obs interceptor makes
+			// every activity observable under its record's reference.
+			Interceptors: []interceptor.WorkerInterceptor{&obs.Interceptor{Contour: "run"}, &cleanupInterceptor{}, tracing},
 		})
 		w.RegisterWorkflowWithOptions(wrap(pipelineId, fn), workflow.RegisterOptions{Name: string(pipelineId)})
 		if err := registerRecorded(w, c, rec); err != nil {
@@ -222,7 +223,10 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error), o
 			return fmt.Errorf("%s: %w", wire.EnvAgentId, err)
 		}
 		w := worker.New(c, wire.AgentRunQueue(agentId, runId), worker.Options{
-			Interceptors: []interceptor.WorkerInterceptor{tracing},
+			// Library resources (docker, k8s, ...) live their activities
+			// HERE: the obs interceptor is what makes a brought kind's
+			// records observable with zero code in the library.
+			Interceptors: []interceptor.WorkerInterceptor{&obs.Interceptor{Contour: "machine"}, tracing},
 		})
 		if err := registerRecorded(w, c, rec); err != nil {
 			return err
