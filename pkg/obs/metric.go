@@ -45,3 +45,20 @@ func Measure(ctx context.Context, name string, value float64, attrs ...KV) {
 	instruments.Unlock()
 	h.Record(ctx, value, metric.WithAttributes(append(ctxAttrs(ctx), attrs...)...))
 }
+
+// Gauge sets the CURRENT value of something — a queue depth, a memory
+// footprint: the reading replaces the previous one instead of
+// accumulating. Count accumulates, Measure distributes, Gauge states.
+func Gauge(ctx context.Context, name string, value float64, attrs ...KV) {
+	instruments.Lock()
+	if instruments.gauges == nil {
+		instruments.gauges = map[string]metric.Float64Gauge{}
+	}
+	g, ok := instruments.gauges[name]
+	if !ok {
+		g, _ = otel.GetMeterProvider().Meter("graphene.obs").Float64Gauge(name)
+		instruments.gauges[name] = g
+	}
+	instruments.Unlock()
+	g.Record(ctx, value, metric.WithAttributes(append(ctxAttrs(ctx), attrs...)...))
+}
