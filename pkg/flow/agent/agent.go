@@ -34,6 +34,10 @@ type State struct {
 	pipeline.AgentState
 	ownership.State
 	ConnectedAt time.Time `json:"connectedAt,omitempty"`
+	// Facts is the machine's inventory as the agent last reported it —
+	// on the RECORD, so every reader gets it from the state instead of
+	// asking the registry.
+	Facts *MachineFacts `json:"facts,omitempty"`
 }
 
 // Ops is the side-effect boundary of the machine flow. Implemented by the
@@ -52,6 +56,31 @@ type AgentStatus struct {
 	Connected   bool     `json:"connected"`
 	Addresses   []string `json:"addresses,omitempty"`
 	FactsDigest string   `json:"factsDigest,omitempty"`
+	// Facts is the full inventory behind the digest; the reconcile
+	// writes it onto the record's state.
+	Facts *MachineFacts `json:"facts,omitempty"`
+}
+
+// MachineFacts is the machine's inventory: what the box IS, from the
+// agent's hello — hardware, distribution, and addresses WITH their
+// interface names so a consumer filters by name, not by heuristics.
+type MachineFacts struct {
+	Hostname    string `json:"hostname,omitempty"`
+	OS          string `json:"os,omitempty"`
+	Arch        string `json:"arch,omitempty"`
+	Cpus        int    `json:"cpus,omitempty"`
+	MemoryBytes uint64 `json:"memoryBytes,omitempty"`
+	// The distribution identity from /etc/os-release.
+	OSReleaseId      string           `json:"osReleaseId,omitempty"`
+	OSReleaseLike    string           `json:"osReleaseLike,omitempty"`
+	OSReleaseVersion string           `json:"osReleaseVersion,omitempty"`
+	Interfaces       []InterfaceAddrs `json:"interfaces,omitempty"`
+}
+
+// InterfaceAddrs is one interface and its addresses.
+type InterfaceAddrs struct {
+	Name      string   `json:"name"`
+	Addresses []string `json:"addresses,omitempty"`
 }
 
 // Activity names (registered by the server against its Ops).
@@ -185,6 +214,7 @@ func initMachine(ctx workflow.Context, opts Options, spec pipeline.AgentSpec) (S
 			st.ConnectedAt = workflow.Now(ctx)
 			st.Addresses = status.Addresses
 			st.FactsDigest = status.FactsDigest
+			st.Facts = status.Facts
 			return st, nil
 		}
 		if err := workflow.Sleep(ctx, opts.PollInterval); err != nil {
@@ -207,6 +237,7 @@ func reconcileMachine(ctx workflow.Context, ec *entdefine.Ctx[pipeline.AgentSpec
 	if status.Connected {
 		st.Addresses = status.Addresses
 		st.FactsDigest = status.FactsDigest
+		st.Facts = status.Facts
 	}
 	return nil
 }
