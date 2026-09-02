@@ -113,6 +113,15 @@ func NewResource[Out any](ctx Context, self ref.OwnerRef, fut workflow.Future) R
 	return Resource[Out]{self: self, fut: fut, rec: ctx.Recording()}
 }
 
+// FailedResource is a handle that already failed — a library uses it when
+// a declaration is malformed (a bad source), so Ready surfaces the error
+// instead of dispatching doomed work.
+func FailedResource[Out any](ctx Context, self ref.OwnerRef, err error) Resource[Out] {
+	fut, set := workflow.NewFuture(ctx.Context)
+	set.SetError(err)
+	return Resource[Out]{self: self, fut: fut, rec: ctx.Recording()}
+}
+
 // ResourceOptions is the resolved option set of a declaration.
 type ResourceOptions struct {
 	// Parent owns the new resource; zero means the run.
