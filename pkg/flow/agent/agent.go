@@ -190,8 +190,25 @@ func agentId(ctx workflow.Context) id.AgentId {
 	return id.AgentId(full)
 }
 
+// ServerNode is the topology's external node for the control plane —
+// the far end of every agent's virtual edges.
+const ServerNode = "graphene-server"
+
+// virtualAgentFlows are the edges an agent ALWAYS has to the server:
+// its telemetry (obs), the command channel that runs its work, and the
+// interactive shell. They are not declared by the user — the system
+// knows they exist — so the topology draws them for free.
+func virtualAgentFlows() []ownership.Flow {
+	return []ownership.Flow{
+		{To: ServerNode, Protocol: ownership.OTLP, Label: "obs", Virtual: true},
+		{To: ServerNode, Protocol: ownership.Command, Label: "commands", Virtual: true},
+		{To: ServerNode, Protocol: ownership.TTY, Label: "shell", Virtual: true},
+	}
+}
+
 func initMachine(ctx workflow.Context, opts Options, spec pipeline.AgentSpec) (State, error) {
 	var st State
+	st.State.Flows = virtualAgentFlows()
 	mid := agentId(ctx)
 	actx := activityCtx(ctx)
 

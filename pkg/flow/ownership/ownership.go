@@ -33,18 +33,41 @@ type State struct {
 	Flows []Flow `json:"flows,omitempty"`
 }
 
+// Protocol is HOW an edge talks. It is an OPEN vocabulary: the
+// constants below are the known ones a UI renders and a query groups
+// by, but the type is a string alias, so a user names their own with
+// Protocol("mqtt") — the set is not sealed.
+type Protocol string
+
+// The known edge protocols (a user may still use any other).
+const (
+	TCP            Protocol = "tcp"
+	HTTP           Protocol = "http"
+	GRPC           Protocol = "grpc"
+	PrometheusPull Protocol = "prometheus_pull"
+	RemoteWrite    Protocol = "remote_write"
+	OTLP           Protocol = "otlp"
+	// The agent↔server virtual protocols — always present on an agent.
+	Command Protocol = "command"
+	TTY     Protocol = "tty"
+)
+
 // Flow is one declared outgoing edge: this record initiates a
 // connection TO another, over a protocol, carrying something.
 type Flow struct {
 	// To is the target — a record ref ("agent/edge-1") or an external
-	// endpoint ("stroppy-server", "10.0.0.5:5432").
+	// endpoint ("graphene-server", "10.0.0.5").
 	To string `json:"to"`
-	// Protocol names how ("http", "tcp", "prometheus_pull").
-	Protocol string `json:"protocol"`
-	// Label is the human note on the edge ("logs", "node 9100").
+	// Protocol names HOW.
+	Protocol Protocol `json:"protocol"`
+	// Label is the human note on the edge ("logs", "node metrics").
 	Label string `json:"label,omitempty"`
-	// Port is the target port, when it clarifies the edge.
+	// Port is the target port, kept SEPARATE from the label so a UI can
+	// show it distinctly; 0 when the protocol needs none.
 	Port int `json:"port,omitempty"`
+	// Virtual marks a system edge that always exists (agent↔server obs/
+	// command/tty), not one the user declared.
+	Virtual bool `json:"virtual,omitempty"`
 }
 
 // TransferCmd gives the resource to a new owner.
