@@ -26,6 +26,25 @@ type State struct {
 	// KeepUntil bounds the stay under the current owner; nil means
 	// until an explicit delete.
 	KeepUntil *time.Time `json:"keepUntil,omitempty"`
+	// Flows are the OUTGOING data-flow edges this record declares — the
+	// second axis, orthogonal to ownership: who it talks to and how.
+	// A UI draws the topology from them (Р-Н25). Declared intent, not
+	// verified traffic. Empty on records that talk to nothing.
+	Flows []Flow `json:"flows,omitempty"`
+}
+
+// Flow is one declared outgoing edge: this record initiates a
+// connection TO another, over a protocol, carrying something.
+type Flow struct {
+	// To is the target — a record ref ("agent/edge-1") or an external
+	// endpoint ("stroppy-server", "10.0.0.5:5432").
+	To string `json:"to"`
+	// Protocol names how ("http", "tcp", "prometheus_pull").
+	Protocol string `json:"protocol"`
+	// Label is the human note on the edge ("logs", "node 9100").
+	Label string `json:"label,omitempty"`
+	// Port is the target port, when it clarifies the edge.
+	Port int `json:"port,omitempty"`
 }
 
 // TransferCmd gives the resource to a new owner.

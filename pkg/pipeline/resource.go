@@ -6,6 +6,7 @@ import (
 
 	"go.temporal.io/sdk/workflow"
 
+	"github.com/graphene-ci/pipeline/pkg/flow/ownership"
 	"github.com/graphene-ci/pipeline/pkg/ref"
 	"github.com/graphene-ci/pipeline/pkg/wire"
 )
@@ -126,6 +127,31 @@ type ResourceOptions struct {
 	// Needs are capability requirements: readiness of the resource
 	// additionally waits for them (agents today).
 	Needs []wire.NeedSpec
+	// Flows are the OUTGOING data-flow edges the resource declares — the
+	// topology's second axis (Р-Н25). Annotation for the UI; the system
+	// does not act on them.
+	Flows []Flow
+}
+
+// Flow is a declared outgoing edge — re-exported from ownership so
+// callers use one type.
+type Flow = ownership.Flow
+
+// WithFlow declares one outgoing edge: this resource talks TO target
+// over protocol, carrying label. target is a resource handle's ref or
+// an external endpoint string.
+func WithFlow(to string, protocol, label string) ResourceOption {
+	return func(o *ResourceOptions) {
+		o.Flows = append(o.Flows, Flow{To: to, Protocol: protocol, Label: label})
+	}
+}
+
+// WithFlowTo is WithFlow to a resource HANDLE (the common case — an
+// edge to another declared record).
+func WithFlowTo(h Handle, protocol, label string) ResourceOption {
+	return func(o *ResourceOptions) {
+		o.Flows = append(o.Flows, Flow{To: string(h.ResourceRef()), Protocol: protocol, Label: label})
+	}
 }
 
 // ResourceOption tunes a resource declaration.
