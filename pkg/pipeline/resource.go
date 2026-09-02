@@ -146,21 +146,47 @@ type ResourceOptions struct {
 // callers use one type.
 type Flow = ownership.Flow
 
+// Protocol re-exports the edge-protocol vocabulary so callers write
+// pipeline.TCP, pipeline.PrometheusPull, … with no second import.
+type Protocol = ownership.Protocol
+
+// The edge protocols, re-exported.
+const (
+	TCP            = ownership.TCP
+	HTTP           = ownership.HTTP
+	GRPC           = ownership.GRPC
+	PrometheusPull = ownership.PrometheusPull
+	RemoteWrite    = ownership.RemoteWrite
+	OTLP           = ownership.OTLP
+)
+
+// FlowOption tunes a declared edge — the port, kept separate from the
+// label.
+type FlowOption func(*Flow)
+
+// FlowPort sets the target port of an edge.
+func FlowPort(port int) FlowOption {
+	return func(f *Flow) { f.Port = port }
+}
+
 // WithFlow declares one outgoing edge: this resource talks TO target
-// over protocol, carrying label. target is a resource handle's ref or
-// an external endpoint string.
-func WithFlow(to string, protocol, label string) ResourceOption {
+// over protocol, carrying label. target is an external endpoint string
+// (for a record handle use WithFlowTo). The port, if any, is a
+// FlowPort option — never baked into the label.
+func WithFlow(to string, protocol Protocol, label string, opts ...FlowOption) ResourceOption {
 	return func(o *ResourceOptions) {
-		o.Flows = append(o.Flows, Flow{To: to, Protocol: protocol, Label: label})
+		f := Flow{To: to, Protocol: protocol, Label: label}
+		for _, opt := range opts {
+			opt(&f)
+		}
+		o.Flows = append(o.Flows, f)
 	}
 }
 
 // WithFlowTo is WithFlow to a resource HANDLE (the common case — an
 // edge to another declared record).
-func WithFlowTo(h Handle, protocol, label string) ResourceOption {
-	return func(o *ResourceOptions) {
-		o.Flows = append(o.Flows, Flow{To: string(h.ResourceRef()), Protocol: protocol, Label: label})
-	}
+func WithFlowTo(h Handle, protocol Protocol, label string, opts ...FlowOption) ResourceOption {
+	return WithFlow(string(h.ResourceRef()), protocol, label, opts...)
 }
 
 // ResourceOption tunes a resource declaration.
