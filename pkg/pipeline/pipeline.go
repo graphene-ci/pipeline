@@ -67,6 +67,27 @@ func serverCtx(ctx workflow.Context) workflow.Context {
 	})
 }
 
+// ensureCtx bounds the ONE activity that can hang the whole run: bringing
+// the (agent × run) container up. Without an overall deadline a container
+// that never starts — a wrong server address, a stale runc state, a dead
+// agent — retries every minute forever, and the run stays Running,
+// holding every cloud resource it declared. ScheduleToCloseTimeout caps
+// the total wait across retries: the container must come up within it or
+// the activity fails and the run tears down instead of bleeding.
+func ensureCtx(ctx workflow.Context) workflow.Context {
+	return workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		TaskQueue:              wire.ServerQueue,
+		StartToCloseTimeout:    30 * time.Minute,
+		ScheduleToCloseTimeout: 15 * time.Minute,
+		HeartbeatTimeout:       time.Minute,
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    time.Second,
+			BackoffCoefficient: 2,
+			MaximumInterval:    time.Minute,
+		},
+	})
+}
+
 // DispatchOnAgent runs a named activity inside the per-(agent × run)
 // container: the first touch of an agent by the run brings the container
 // up (an idempotent server call precedes the activity), exposed as one
@@ -85,7 +106,7 @@ func DispatchOnAgent(ctx Context, agentId id.AgentId, actOpts workflow.ActivityO
 	fut, set := workflow.NewFuture(ctx)
 	workflow.Go(ctx, func(gctx workflow.Context) {
 		req := wire.EnsureContainerRequest{AgentId: agentId, RunId: ctx.RunId(), Image: image}
-		if err := workflow.ExecuteActivity(serverCtx(gctx), wire.EnsureContainerActivity, req).Get(gctx, nil); err != nil {
+		if err := workflow.ExecuteActivity(ensureCtx(gctx), wire.EnsureContainerActivity, req).Get(gctx, nil); err != nil {
 			set.SetError(err)
 			return
 		}
