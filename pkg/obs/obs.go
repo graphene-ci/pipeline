@@ -78,8 +78,8 @@ func ctxAttrs(ctx context.Context) []attribute.KeyValue {
 		// not from the process: one server process serves every
 		// namespace's bundles, and a resource-level stamp would brand
 		// them all with the process's own.
-		if info.WorkflowNamespace != "" {
-			out = append(out, attribute.String(AttrNamespace, info.WorkflowNamespace))
+		if info.Namespace != "" {
+			out = append(out, attribute.String(AttrNamespace, info.Namespace))
 		}
 	}
 	return out

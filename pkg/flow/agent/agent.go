@@ -208,7 +208,7 @@ func virtualAgentFlows() []ownership.Flow {
 
 func initMachine(ctx workflow.Context, opts Options, spec pipeline.AgentSpec) (State, error) {
 	var st State
-	st.State.Flows = virtualAgentFlows()
+	st.Flows = virtualAgentFlows()
 	mid := agentId(ctx)
 	actx := activityCtx(ctx)
 
