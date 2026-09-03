@@ -1,39 +1,35 @@
 # AGENTS.md — pipeline
 
-The user-facing pipeline library of graphene vision v3 (`../GRAPHENE.MD`
-at the org root) and the shared vocabulary of the system: the server and
-the agent import types from here — nothing here imports them back.
+Пользовательский Go SDK Graphene и общая vocabulary сервера и агента. Модель
+продукта находится в `../GRAPHENE.MD`.
 
-## Before making changes
+## Перед изменением
 
-1. Read `../GRAPHENE.MD`. A change that contradicts the vision updates
-   the vision first.
-2. `make lint` and `make test` must be green before push.
+1. Прочитайте `../GRAPHENE.MD`. Противоречащее ему изменение сначала правит
+   продуктовый документ.
+2. Перед push обязательны `make lint` и `make test`.
 
-## Code rules
+## Правила кода
 
-- Go; code, names, and comments in English. Commits are Conventional
-  Commits, no `Co-Authored-By`.
-- Identifiers are the `pkg/id` types, suffix `Id` (the var-naming exception
-  is recorded in `.golangci.yaml`).
-- Secrets and large data never enter specs, logs, or Temporal history —
-  references only (`pkg/ref`).
-- Machine-execution helpers take named registered functions, never
-  closures.
-- The machine-execution pair naming (`OnMachine`/`Action`) is
-  provisional — do not spread the names further until decided.
+- Go; код, имена и комментарии — на английском. Коммиты — Conventional Commits
+  без `Co-Authored-By`.
+- Идентификаторы — типы из `pkg/id` с суффиксом `Id`; исключение для имён
+  переменных записано в `.golangci.yaml`.
+- Секреты и большие данные не входят в specs, логи или Temporal history:
+  используются ссылки из `pkg/ref`.
+- Machine activities объявляются через `pkg/activity`; аргументы остаются
+  сериализуемыми, а для небезопасного повтора выбирается явная гарантия.
 
-## Package boundaries
+## Границы пакетов
 
-- `pkg/id`, `pkg/ref` — vocabulary; import nothing from this repository and no
-  Temporal packages.
-- `pkg/wire` — cross-component conventions (queue names, server activity
-  names, search attribute keys).
-- `pkg/pipeline` — the user-facing workflow helpers; the server
-  contract they speak is the activity names in `wire`.
-- `pkg/flow/*` — temporal flows of the system resources: definition + `Ops`
-  contract; `Ops` implementations live in the graphene server. Flow
-  packages import the root package for shared types, never the other way
-  around.
-- No server code and no agent code here — those live in the graphene and
-  agent repositories.
+- `pkg/id`, `pkg/ref` — базовая vocabulary без Temporal и без импортов других
+  пакетов этого репозитория.
+- `pkg/wire` — межкомпонентные соглашения: queues, имена server activities и
+  search attributes.
+- `pkg/pipeline` — `Main`, handles ресурсов/агентов, run context, flows и
+  встроенная CLI `plan`/`push`/`run`.
+- `pkg/activity`, `pkg/artifact`, `pkg/file`, `pkg/trigger`, `pkg/obs` —
+  пользовательские поверхности действий, данных, триггеров и телеметрии.
+- `pkg/flow/*` — определения системных ресурсов и их `Ops` contracts;
+  реализации `Ops` принадлежат серверу `graphene`.
+- Серверный и агентский код в этот репозиторий не добавляются.
