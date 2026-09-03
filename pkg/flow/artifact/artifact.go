@@ -66,7 +66,7 @@ func initArtifact(ctx workflow.Context, spec pipeline.ArtifactSpec) (State, erro
 		return st, errors.New("blob not found at location")
 	}
 	st.Verified = true
-	st.ArtifactState.Blob = spec.Blob
+	st.Blob = spec.Blob
 	ownership.Init(ctx, &st.State, spec.Owner)
 	return st, nil
 }
@@ -74,10 +74,10 @@ func initArtifact(ctx workflow.Context, spec pipeline.ArtifactSpec) (State, erro
 func finalizeArtifact(ctx workflow.Context, st *State) error {
 	// Deleting the record deletes the bytes: owned data dies with its
 	// record.
-	if st.ArtifactState.Blob.Digest == "" {
+	if st.Blob.Digest == "" {
 		return nil
 	}
-	return workflow.ExecuteActivity(activityCtx(ctx), DeleteActivity, artifactId(ctx), st.ArtifactState.Blob).Get(ctx, nil)
+	return workflow.ExecuteActivity(activityCtx(ctx), DeleteActivity, artifactId(ctx), st.Blob).Get(ctx, nil)
 }
 
 func activityCtx(ctx workflow.Context) workflow.Context {

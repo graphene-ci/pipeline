@@ -89,7 +89,7 @@ const (
 func uploadFileActivity(ctx context.Context, path string) (ref.BlobRef, error) {
 	// The path names a MACHINE file; in an agent-hosted container the
 	// machine lives under the machine root.
-	f, err := os.Open(machine.Path(path)) //nolint:gosec // uploading the named file is the point
+	f, err := os.Open(machine.Path(path))
 	if err != nil {
 		return ref.BlobRef{}, err
 	}
