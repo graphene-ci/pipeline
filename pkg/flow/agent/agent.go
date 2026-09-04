@@ -216,7 +216,14 @@ func initMachine(ctx workflow.Context, opts Options, spec pipeline.AgentSpec) (S
 	// owner until a later adopt lands — which it cannot, because an entity
 	// runs commands only after init returns — leaving a "creating" agent
 	// nobody owns.
-	if spec.Owner != "" {
+	//
+	// GATED by version: setting the owner emits a search-attribute command
+	// at the very start of init. Agent workflows created before this change
+	// have histories without it; replaying them under the new code would be
+	// non-deterministic (a command where the history has none) and panic
+	// the workflow forever. GetVersion returns DefaultVersion for those old
+	// histories (skip), and 1 for anything created from here on (apply).
+	if workflow.GetVersion(ctx, "agent-owner-at-init", workflow.DefaultVersion, 1) >= 1 && spec.Owner != "" {
 		ownership.Init(ctx, &st.State, spec.Owner)
 	}
 	mid := agentId(ctx)
