@@ -132,7 +132,20 @@ func NewAgent(ctx Context, name string, opts ...ResourceOption) AgentHandle {
 		return h
 	}
 	o := BuildResourceOptions(ctx, opts)
-	spec := AgentSpec{Owner: o.Parent, Labels: o.Labels, Needs: o.Needs}
+	// Own the record from the RUN by default (unless an explicit parent was
+	// given): NewAgent's machine is one the run brings up (a crossplane vm),
+	// so the record must die with the run. Without an owner set AT INIT the
+	// record is orphaned — the later Children/adopt transfer only lands
+	// after the agent's init finishes (it connects), so a run torn down
+	// while the machine is still coming up leaves a "creating" agent nobody
+	// owns and the teardown cascade never reaches. A parent given by
+	// Children re-homes it later; if that never lands, run-ownership still
+	// gets it cleaned.
+	owner := o.Parent
+	if owner == "" {
+		owner = ref.RunOwner(ctx.RunId())
+	}
+	spec := AgentSpec{Owner: owner, Labels: o.Labels, Needs: o.Needs}
 	sctx := serverCtx(ctx)
 	h.Resource = NewResource[AgentState](ctx, self, workflow.ExecuteActivity(sctx, wire.DeclareAgentActivity, agentId, spec))
 	h.userData = workflow.ExecuteActivity(sctx, wire.AgentUserDataActivity, agentId)
