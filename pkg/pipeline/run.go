@@ -51,7 +51,14 @@ func Run[R any](ctx Context, pipeline, cell string, params any, opts ...Resource
 func RunAll[R any](ctx Context, pipeline string, cells []Cell, concurrency int, opts ...ResourceOption) []Resource[R] {
 	if ctx.Recording() {
 		ctx.RecordStep("run", "pipeline/"+pipeline, "", "× N cells")
-		return nil
+		// Return real (nil-future) handles, one per cell, not nil: a plan
+		// pass may index the slice, and Resource.TryReady handles the
+		// recording branch. Matches Run's recording return.
+		out := make([]Resource[R], len(cells))
+		for i := range cells {
+			out[i] = NewResource[R](ctx, ref.OwnerRef("run/"+string(ctx.RunId())+"-"+cells[i].ID), nil)
+		}
+		return out
 	}
 	o := BuildResourceOptions(ctx, opts)
 	if concurrency <= 0 || concurrency > len(cells) {
