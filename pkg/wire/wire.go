@@ -4,6 +4,7 @@
 package wire
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -71,7 +72,42 @@ const (
 	// PublishCapabilityActivity writes a capability onto a machine's
 	// record.
 	PublishCapabilityActivity = "server.capability.publish"
+
+	// StartChildRunActivity starts (or attaches to) a CHILD run owned by
+	// the calling run: the server raises the child's managed container on
+	// the child pipeline's own active image and stamps the child's
+	// EntityOwner to the caller run — so the parent's tree, cancel cascade
+	// and teardown reach it. Idempotent by child run id (USE_EXISTING):
+	// a parent replay re-attaches to the live child, never forks a second.
+	// The parent is taken from the activity's own workflow id, never
+	// trusted from the request.
+	StartChildRunActivity = "server.run.start-child"
+	// AwaitChildRunActivity blocks until a child run reaches a terminal
+	// state and returns its typed result as JSON (or an error for a
+	// failed/cancelled child), heartbeating so a worker restart re-attaches
+	// instead of re-running. The caller must own the child.
+	AwaitChildRunActivity = "server.run.await-child"
 )
+
+// StartChildRunRequest asks the server to start a child run under the
+// calling run. The parent (owner) is derived server-side from the
+// activity's workflow id, not from this request.
+type StartChildRunRequest struct {
+	// RunId is the child's run id — deterministic ("<parent>-<cell>") so a
+	// parent replay attaches to the same child.
+	RunId string `json:"runId"`
+	// Pipeline is the child's pipeline id; its ACTIVE image is used.
+	Pipeline string `json:"pipeline"`
+	// Params is the child pipeline's typed params, as JSON.
+	Params json.RawMessage `json:"params,omitempty"`
+	// Labels are user labels for the child run.
+	Labels map[string]string `json:"labels,omitempty"`
+}
+
+// AwaitChildRunRequest names the child run to wait for.
+type AwaitChildRunRequest struct {
+	RunId string `json:"runId"`
+}
 
 // NeedSpec is one capability requirement: the capability must exist,
 // be ready, and match the label constraints — equality and In only,
