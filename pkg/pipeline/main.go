@@ -301,6 +301,14 @@ func wrap[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) fu
 				panic(p)
 			}
 		}()
+		// The door checked the schema before this run was allowed to start;
+		// now enforce what the schema could not — the full validator tag set
+		// and the type's own Validate() — so a bad submit fails here, at
+		// once, instead of deep inside the run.
+		if verr := checkParams(params); verr != nil {
+			failure = verr.Error()
+			return result, verr
+		}
 		result, err = fn(Context{Context: wctx, pipelineId: pipelineId}, params)
 		if err != nil {
 			failure = err.Error()
