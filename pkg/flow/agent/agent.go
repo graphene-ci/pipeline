@@ -209,6 +209,16 @@ func virtualAgentFlows() []ownership.Flow {
 func initMachine(ctx workflow.Context, opts Options, spec pipeline.AgentSpec) (State, error) {
 	var st State
 	st.Flows = virtualAgentFlows()
+	// Set the owner at INIT, before the (possibly long) wait for the agent
+	// to connect: a run that declares this agent owns it from the first
+	// moment, so a run torn down while the machine is still coming up still
+	// reaches the record in its cascade. Without this the record has no
+	// owner until a later adopt lands — which it cannot, because an entity
+	// runs commands only after init returns — leaving a "creating" agent
+	// nobody owns.
+	if spec.Owner != "" {
+		ownership.Init(ctx, &st.State, spec.Owner)
+	}
 	mid := agentId(ctx)
 	actx := activityCtx(ctx)
 
