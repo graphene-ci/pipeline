@@ -17,7 +17,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -76,7 +75,10 @@ func Command(ctx context.Context, name string, args ...string) *exec.Cmd {
 	// kernel resolves name inside the chroot at execve.
 	cmd.Err = nil
 	cmd.Path = name
-	cmd.SysProcAttr = &syscall.SysProcAttr{Chroot: root}
+	// chroot is a Linux syscall — the machine role runs only on Linux; the
+	// non-Linux build has a no-op so cross-platform consumers (the CLI) still
+	// compile.
+	setChroot(cmd, root)
 	// A chrooted child starts at the machine's /, with a sane PATH.
 	cmd.Dir = "/"
 	if !hasEnv(cmd.Env, "PATH") {
