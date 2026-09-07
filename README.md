@@ -1,39 +1,81 @@
 # pipeline
 
-Go SDK, на котором автор описывает пайплайн Graphene. Один обычный Go-бинарь
-содержит типизированные параметры и результат, workflow прогона, объявления
-ресурсов и действия на машинах. Тот же бинарь предоставляет команды `plan`,
-`push` и `run` и в серверном режиме обслуживает нужные worker queues.
+The Go SDK an author writes a Graphene pipeline with. One ordinary Go binary
+holds the typed params and result, the run workflow, resource declarations and
+machine actions. That same binary exposes the `plan`, `push` and `run` commands
+and, in server mode, serves the worker queues it needs.
 
-SDK добавляет поверх Temporal продуктовую модель Graphene:
+On top of Temporal the SDK adds Graphene's product model:
 
-- неблокирующие типизированные handles ресурсов и явный `Ready`;
-- дерево владения, каскадное удаление, stand и ограниченное время жизни;
-- агенты существующих и создаваемых машин, выборки и fan-out действий;
-- гарантии повторения activity, включая at-most-once для необратимой работы;
-- артефакты, secrets/vars по ссылкам, триггеры и межпайплайновые связи;
-- объявленные сетевые/data flows и атрибуцию событий, логов, метрик и traces.
+- non-blocking typed resource handles and an explicit `Ready`;
+- the ownership tree, cascading delete, stands and bounded lifetime;
+- agents for existing and created machines, selections and action fan-out;
+- activity retry guarantees, including at-most-once for irreversible work;
+- artifacts, secret/var references, triggers and cross-pipeline links;
+- declared network/data flows and attribution of events, logs, metrics and traces.
 
-Пользовательское руководство и справочник SDK находятся в
-[документации Graphene](https://graphene-ci.github.io/docs/sdk/main).
+The user guide and SDK reference are in the
+[Graphene docs](https://graphene-ci.github.io/docs/sdk/main).
 
-## Пакеты
+## Install
 
-| Путь | Назначение |
+Releases: [github.com/graphene-ci/pipeline/releases](https://github.com/graphene-ci/pipeline/releases).
+
+Add the SDK to a pipeline module:
+
+```bash
+go get github.com/graphene-ci/pipeline@latest   # or @v0.1.1
+```
+
+A minimal pipeline:
+
+```go
+package main
+
+import "github.com/graphene-ci/pipeline/pkg/pipeline"
+
+type Params struct {
+	Msg string `json:"msg" validate:"required"`
+}
+type Result struct {
+	Echo string `json:"echo"`
+}
+
+func run(_ pipeline.Context, p Params) (Result, error) {
+	return Result{Echo: "echo: " + p.Msg}, nil
+}
+
+func main() { pipeline.Main("echo", run) }
+```
+
+The binary then offers `plan` (local, no server), `push` and `run`.
+
+## Packages
+
+| Path | Purpose |
 |---|---|
-| `pkg/pipeline` | `Main`, контекст прогона, ресурсы, агенты, flows и встроенная CLI |
-| `pkg/activity` | действия на агентах и гарантии выполнения |
-| `pkg/artifact`, `pkg/file` | источники артефактов и файлов |
-| `pkg/trigger` | manual, cron, webhook и upstream-триггеры |
-| `pkg/obs` | атрибутированная телеметрия пользовательского кода |
-| `pkg/id`, `pkg/ref`, `pkg/wire` | идентификаторы, ссылки и wire conventions |
-| `pkg/flow/*` | определения долговечных системных ресурсов |
+| `pkg/pipeline` | `Main`, the run context, resources, agents, flows and the built-in CLI |
+| `pkg/activity` | agent actions and execution guarantees |
+| `pkg/artifact`, `pkg/file` | artifact and file sources |
+| `pkg/trigger` | manual, cron, webhook and upstream triggers |
+| `pkg/obs` | attributed telemetry from user code |
+| `pkg/id`, `pkg/ref`, `pkg/wire` | identifiers, references and wire conventions |
+| `pkg/flow/*` | durable system-resource definitions |
 
-## Сборка и проверка
+## Build and check
 
 ```bash
 make configure
 make lint
 make test
 make build
+```
+
+## Release
+
+A pushed semver tag (`vX.Y.Z`) is the release — the Go module proxy serves it,
+and the release workflow creates the matching GitHub Release page:
+
+```bash
+make ver v=0.1.1        # or: make bump TYPE=patch
 ```
