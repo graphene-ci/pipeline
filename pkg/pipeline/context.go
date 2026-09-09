@@ -181,6 +181,7 @@ type recorder struct {
 	kinds       map[string]bool
 	kindDecls   map[string]kindDecl
 	errs        []error
+	values      map[string]any
 
 	// The plan: declared nodes, ordered steps, and the Ready-reads
 	// accumulated since the last step (the next step's data deps).
@@ -214,7 +215,31 @@ func (r *recorder) step(op, subject, agent, note string) {
 }
 
 func newRecorder() *recorder {
-	return &recorder{activities: map[string]any{}, kinds: map[string]bool{}}
+	return &recorder{activities: map[string]any{}, kinds: map[string]bool{}, values: map[string]any{}}
+}
+
+// RecordValue returns registration-local library state, creating it once.
+// Call only during Recording. The factory must not call recording methods.
+// Values belong to one preparation, never to the process or a running workflow.
+func (c Context) RecordValue(key string, factory func() any) any {
+	if c.rec == nil {
+		return nil
+	}
+	c.rec.mu.Lock()
+	defer c.rec.mu.Unlock()
+	if value, ok := c.rec.values[key]; ok {
+		return value
+	}
+	value := factory()
+	c.rec.values[key] = value
+	return value
+}
+
+// RecordOnce claims a library registration key for this preparation.
+func (c Context) RecordOnce(key string) bool {
+	first := false
+	c.RecordValue(key, func() any { first = true; return true })
+	return first
 }
 
 // planGraph renders the collected plan for the manifest.

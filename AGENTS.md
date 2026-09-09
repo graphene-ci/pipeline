@@ -28,6 +28,9 @@
   search attributes.
 - `pkg/pipeline` — `Main`, handles ресурсов/агентов, run context, flows и
   встроенная CLI `plan`/`push`/`run`.
+- `pkg/pipelinetest` — изолированная тестовая модель контрактов; не импортирует
+  сервер. `Prepare` и cleanup общие с `Main`; test-only зависимости не входят
+  в граф импортов production-пайплайна.
 - `pkg/activity`, `pkg/artifact`, `pkg/file`, `pkg/trigger`, `pkg/obs` —
   пользовательские поверхности действий, данных, триггеров и телеметрии.
 - `pkg/flow/*` — определения системных ресурсов и их `Ops` contracts;

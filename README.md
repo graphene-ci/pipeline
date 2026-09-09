@@ -54,7 +54,8 @@ The binary then offers `plan` (local, no server), `push` and `run`.
 
 | Path | Purpose |
 |---|---|
-| `pkg/pipeline` | `Main`, the run context, resources, agents, flows and the built-in CLI |
+| `pkg/pipeline` | `Main`, `Prepare`, the run context, resources, agents, flows and the built-in CLI |
+| `pkg/pipelinetest` | isolated Graphene contract simulator on Temporal testsuite |
 | `pkg/activity` | agent actions and execution guarantees |
 | `pkg/artifact`, `pkg/file` | artifact and file sources |
 | `pkg/trigger` | manual, cron, webhook and upstream triggers |
@@ -69,6 +70,20 @@ make configure
 make lint
 make test
 make build
+```
+
+## Локальные тесты пайплайнов
+
+`pkg/pipelinetest` подключается к Temporal `TestWorkflowEnvironment` и проверяет
+пайплайн с моделью агентов, ресурсов, артефактов и владения. Пользовательские
+activities требуют явных подмен; инфраструктура не запускается. Руководство и
+границы модели: [локальные тесты](https://graphene-ci.github.io/docs/sdk/testing).
+
+`make test` включает тесты readiness, capability selection, cleanup, TTL,
+отмены, retry и at-most-once. Для проверки конкурентного исполнения:
+
+```bash
+go test -race ./pkg/pipelinetest/...
 ```
 
 ## Release
