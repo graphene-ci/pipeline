@@ -121,10 +121,12 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error), o
 			return fmt.Errorf("trigger %q: params do not fit the pipeline's params type: %w", tr.GetName(), err)
 		}
 	}
-	rec, err := record(pipelineId, fn)
+	definition, err := Prepare(pipelineId, fn)
 	if err != nil {
 		return err
 	}
+
+	rec := definition.rec
 
 	// The manifest: what this binary IS, straight from the recording
 	// pass. GRAPHENE_MANIFEST=1 dumps it and exits — the no-server way
@@ -210,9 +212,9 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error), o
 			// Guaranteed teardown: every exit path of the run workflow
 			// triggers the server's cleanup. The obs interceptor makes
 			// every activity observable under its record's reference.
-			Interceptors: []interceptor.WorkerInterceptor{&cleanupInterceptor{}, tracing, &obs.Interceptor{Contour: "run"}},
+			Interceptors: []interceptor.WorkerInterceptor{RunInterceptor(), tracing, &obs.Interceptor{Contour: "run"}},
 		})
-		w.RegisterWorkflowWithOptions(wrap(pipelineId, fn), workflow.RegisterOptions{Name: string(pipelineId)})
+		w.RegisterWorkflowWithOptions(definition.Workflow, workflow.RegisterOptions{Name: string(pipelineId)})
 		if err := registerRecorded(w, c, rec); err != nil {
 			return err
 		}
