@@ -110,8 +110,16 @@ func startChild[R any](ctx Context, childRunId, pipeline string, params any, lab
 			set.SetError(err)
 			return
 		}
-		// Await returns the child's result JSON; Get decodes it into R.
-		set.Chain(workflow.ExecuteActivity(awaitChildCtx(gctx), wire.AwaitChildRunActivity, wire.AwaitChildRunRequest{RunId: childRunId}))
+		// Block on the await IN THIS goroutine so the semaphore (released by
+		// the defer above) is held for the child's whole life, not just its
+		// start — set.Chain only registers a callback and would let the
+		// goroutine return, releasing the slot the instant the await is
+		// dispatched. Get(nil) waits for the terminal without decoding; the
+		// already-resolved future then Chains its encoded result into the
+		// handle for .Ready to decode into R.
+		awaitFut := workflow.ExecuteActivity(awaitChildCtx(gctx), wire.AwaitChildRunActivity, wire.AwaitChildRunRequest{RunId: childRunId})
+		_ = awaitFut.Get(gctx, nil)
+		set.Chain(awaitFut)
 	})
 	return fut
 }
