@@ -231,18 +231,23 @@ func dialDoor(cc cliconfig.Context) (*grpc.ClientConn, error) {
 	}
 	return grpc.NewClient(cc.Server,
 		grpc.WithTransportCredentials(creds),
-		grpc.WithPerRPCCredentials(cliBearer{token: cc.Token, insecure: cc.Insecure}),
+		grpc.WithPerRPCCredentials(cliBearer{token: cc.Token, namespace: cc.Namespace, insecure: cc.Insecure}),
 		grpc.WithUnaryInterceptor(retry.UnaryClientInterceptor(retryOpts...)),
 	)
 }
 
 type cliBearer struct {
-	token    string
-	insecure bool
+	token     string
+	namespace string
+	insecure  bool
 }
 
 func (b cliBearer) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
-	return map[string]string{"authorization": "Bearer " + b.token}, nil
+	metadata := map[string]string{"authorization": "Bearer " + b.token}
+	if b.namespace != "" {
+		metadata["x-graphene-namespace"] = b.namespace
+	}
+	return metadata, nil
 }
 
 func (b cliBearer) RequireTransportSecurity() bool { return !b.insecure }
