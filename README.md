@@ -94,3 +94,9 @@ and the release workflow creates the matching GitHub Release page:
 ```bash
 make ver v=0.1.1        # or: make bump TYPE=patch
 ```
+
+Machine commands (`pkg/machine`) execute in the host mount namespace and root
+through the host's `/usr/bin/nsenter` (util-linux). Machine agents must preserve
+host capabilities and device access. This makes mounts visible to Docker and
+other host services. Direct execution without `GRAPHENE_MACHINE_ROOT` uses
+ordinary process execution.

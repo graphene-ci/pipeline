@@ -3,6 +3,7 @@ package machine
 import (
 	"context"
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -30,8 +31,12 @@ func TestMountedMachineRoot(t *testing.T) {
 	if cmd.SysProcAttr == nil || cmd.SysProcAttr.Chroot != "/host" {
 		t.Fatalf("shell must chroot into the machine root: %+v", cmd.SysProcAttr)
 	}
-	if cmd.Path != "/bin/sh" {
-		t.Fatalf("path must be the machine's absolute /bin/sh: %q", cmd.Path)
+	if cmd.Path != "/usr/bin/nsenter" {
+		t.Fatalf("path must be the machine's nsenter: %q", cmd.Path)
+	}
+	want := []string{"/usr/bin/nsenter", "--mount=/proc/1/ns/mnt", "--root=/proc/1/root", "--wdns=/", "--", "/bin/sh", "-c", "true"}
+	if !slices.Equal(cmd.Args, want) {
+		t.Fatalf("host namespace command: %q", cmd.Args)
 	}
 	if cmd.Err != nil {
 		t.Fatalf("parent-side lookup error must be cleared: %v", cmd.Err)
@@ -58,5 +63,20 @@ func TestWorkspace(t *testing.T) {
 	t.Setenv(EnvWorkspace, "/var/lib/agent/work/run-1")
 	if Workspace() != "/var/lib/agent/work/run-1" {
 		t.Fatal("workspace must come from the env verbatim")
+	}
+}
+
+func TestHostCommandEnvironment(t *testing.T) {
+	t.Setenv(EnvRoot, "/host")
+	t.Setenv("DOCKER_HOST", "unix:///host/run/docker.sock")
+	cmd := Shell(context.Background(), "true")
+	if !slices.Contains(cmd.Env, "DOCKER_HOST=unix:///run/docker.sock") ||
+		!slices.Contains(cmd.Env, EnvRoot+"=") {
+		t.Fatal("host command retained executor paths")
+	}
+	t.Setenv("DOCKER_HOST", "tcp://docker.internal:2376")
+	cmd = Shell(context.Background(), "true")
+	if !slices.Contains(cmd.Env, "DOCKER_HOST=tcp://docker.internal:2376") {
+		t.Fatal("explicit external Docker endpoint changed")
 	}
 }
