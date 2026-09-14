@@ -34,7 +34,7 @@ func TestMountedMachineRoot(t *testing.T) {
 	if cmd.Path != "/usr/bin/nsenter" {
 		t.Fatalf("path must be the machine's nsenter: %q", cmd.Path)
 	}
-	want := []string{"/usr/bin/nsenter", "--mount=/proc/1/ns/mnt", "--root=/proc/1/root", "--wdns=/", "--", "/bin/sh", "-c", "true"}
+	want := []string{"/usr/bin/nsenter", "--mount=/proc/1/ns/mnt", "--root=/proc/1/root", "--", "/bin/sh", "-c", "true"}
 	if !slices.Equal(cmd.Args, want) {
 		t.Fatalf("host namespace command: %q", cmd.Args)
 	}
