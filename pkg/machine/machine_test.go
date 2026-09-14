@@ -31,10 +31,10 @@ func TestMountedMachineRoot(t *testing.T) {
 	if cmd.SysProcAttr == nil || cmd.SysProcAttr.Chroot != "/host" {
 		t.Fatalf("shell must chroot into the machine root: %+v", cmd.SysProcAttr)
 	}
-	if cmd.Path != "/usr/bin/nsenter" {
-		t.Fatalf("path must be the machine's nsenter: %q", cmd.Path)
+	if cmd.Path != "/bin/sh" {
+		t.Fatalf("path must be the machine's launcher shell: %q", cmd.Path)
 	}
-	want := []string{"/usr/bin/nsenter", "--mount=/proc/1/ns/mnt", "--root=/proc/1/root", "--", "/bin/sh", "-c", "true"}
+	want := []string{"/bin/sh", "-c", hostLauncher, "graphene-host", "/bin/sh", "-c", "true"}
 	if !slices.Equal(cmd.Args, want) {
 		t.Fatalf("host namespace command: %q", cmd.Args)
 	}

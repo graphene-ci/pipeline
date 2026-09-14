@@ -54,6 +54,9 @@ func Path(machinePath string) string {
 	return filepath.Join(root, machinePath)
 }
 
+const hostLauncher = `workdir=$(pwd -P) || exit
+exec /usr/bin/nsenter --mount=/proc/1/ns/mnt --root=/proc/1/root --wdns="$workdir" -- "$@"`
+
 // Command builds a command that executes ON THE MACHINE. When the
 // machine filesystem is mounted (runc), the child uses the machine's
 // /usr/bin/nsenter (util-linux) to enter its mount namespace and root.
