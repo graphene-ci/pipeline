@@ -55,10 +55,10 @@ func Path(machinePath string) string {
 }
 
 // Command builds a command that executes ON THE MACHINE. When the
-// machine filesystem is mounted (runc), the child chroots into it
-// before exec, so name resolves in the MACHINE's filesystem and must
-// be absolute ("/bin/sh", "/usr/bin/git"); PATH lookup cannot cross a
-// chroot. On the machine itself (exec runtime) this is plain
+// machine filesystem is mounted (runc), the child uses the machine's
+// /usr/bin/nsenter (util-linux) to enter its mount namespace and root.
+// Mounts therefore reach host services, and name resolves using the host's
+// filesystem and PATH. On the machine itself (exec runtime) this is plain
 // exec.CommandContext.
 func Command(ctx context.Context, name string, args ...string) *exec.Cmd {
 	root := Root()
@@ -85,7 +85,22 @@ func Command(ctx context.Context, name string, args ...string) *exec.Cmd {
 		cmd.Env = append(os.Environ(),
 			"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
 	}
+	cmd.Env = hostEnv(cmd.Env, root)
 	return cmd
+}
+
+// The child already lives on the host. Do not hand it executor-only paths.
+func hostEnv(env []string, root string) []string {
+	for i, value := range env {
+		if strings.HasPrefix(value, EnvRoot+"=") {
+			env[i] = EnvRoot + "="
+		}
+		prefix := "DOCKER_HOST=unix://" + strings.TrimRight(root, "/") + "/"
+		if strings.HasPrefix(value, prefix) {
+			env[i] = "DOCKER_HOST=unix:///" + strings.TrimPrefix(value, prefix)
+		}
+	}
+	return env
 }
 
 // Shell runs a shell script on the machine with the machine's /bin/sh.
