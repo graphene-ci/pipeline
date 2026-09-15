@@ -6,6 +6,7 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
@@ -97,11 +98,14 @@ func (w *lineWriter) flush() {
 
 // tailBuffer keeps the last max bytes.
 type tailBuffer struct {
+	mu  sync.Mutex // stdout and stderr are copied by separate os/exec goroutines
 	max int
 	buf bytes.Buffer
 }
 
 func (t *tailBuffer) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.buf.Write(p)
 	if over := t.buf.Len() - t.max; over > 0 && t.max > 0 {
 		t.buf.Next(over)
@@ -109,4 +113,8 @@ func (t *tailBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (t *tailBuffer) String() string { return t.buf.String() }
+func (t *tailBuffer) String() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.buf.String()
+}

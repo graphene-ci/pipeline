@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	"google.golang.org/grpc"
 
 	"github.com/graphene-ci/pipeline/pkg/wire"
 )
@@ -77,7 +78,9 @@ func Setup(ctx context.Context, cfg Config) (func(context.Context) error, error)
 	}
 
 	traceOpts := []otlptracegrpc.Option{otlptracegrpc.WithEndpoint(cfg.Endpoint), otlptracegrpc.WithHeaders(headers)}
-	metricOpts := []otlpmetricgrpc.Option{otlpmetricgrpc.WithEndpoint(cfg.Endpoint), otlpmetricgrpc.WithHeaders(headers)}
+	// Keep every serialized OTLP chunk below the server's 4 MiB gRPC limit.
+	metricOpts := []otlpmetricgrpc.Option{otlpmetricgrpc.WithEndpoint(cfg.Endpoint), otlpmetricgrpc.WithHeaders(headers),
+		otlpmetricgrpc.WithDialOption(grpc.WithChainUnaryInterceptor(exportMetricChunks))}
 	logOpts := []otlploggrpc.Option{otlploggrpc.WithEndpoint(cfg.Endpoint), otlploggrpc.WithHeaders(headers)}
 	if cfg.Insecure {
 		traceOpts = append(traceOpts, otlptracegrpc.WithInsecure())
