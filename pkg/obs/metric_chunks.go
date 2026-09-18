@@ -68,42 +68,11 @@ func metricChunks(request *collector.ExportMetricsServiceRequest, limit int) ([]
 	return append(first, second...), nil
 }
 
-// Split only OTLP collection boundaries. Attributes, exemplars, histogram
-// buckets and each complete data point stay together. Cloning preserves all
-// metadata and unknown protobuf fields without mutating the caller's request.
+// metricSplitFields are the OTLP collection boundaries a metric request may
+// be cut at. Attributes, exemplars, histogram buckets and each complete data
+// point stay together.
+var metricSplitFields = []protoreflect.Name{"resource_metrics", "scope_metrics", "metrics", "gauge", "sum", "histogram", "exponential_histogram", "summary", "data_points"}
+
 func bisectMetricMessage(message protoreflect.Message) (protoreflect.Message, protoreflect.Message, bool) {
-	for _, name := range []protoreflect.Name{"resource_metrics", "scope_metrics", "metrics", "gauge", "sum", "histogram", "exponential_histogram", "summary", "data_points"} {
-		field := message.Descriptor().Fields().ByName(name)
-		if field == nil || field.Kind() != protoreflect.MessageKind || !message.Has(field) {
-			continue
-		}
-		left := proto.Clone(message.Interface()).ProtoReflect()
-		right := proto.Clone(message.Interface()).ProtoReflect()
-		if field.IsList() {
-			list := message.Get(field).List()
-			if list.Len() > 1 {
-				middle := list.Len() / 2
-				left.Mutable(field).List().Truncate(middle)
-				tail := right.Mutable(field).List()
-				for i := range list.Len() - middle {
-					tail.Set(i, tail.Get(middle+i))
-				}
-				tail.Truncate(list.Len() - middle)
-				return left, right, true
-			}
-			if list.Len() == 1 {
-				first, second, ok := bisectMetricMessage(list.Get(0).Message())
-				if ok {
-					left.Mutable(field).List().Set(0, protoreflect.ValueOfMessage(first))
-					right.Mutable(field).List().Set(0, protoreflect.ValueOfMessage(second))
-					return left, right, true
-				}
-			}
-		} else if first, second, ok := bisectMetricMessage(message.Get(field).Message()); ok {
-			left.Set(field, protoreflect.ValueOfMessage(first))
-			right.Set(field, protoreflect.ValueOfMessage(second))
-			return left, right, true
-		}
-	}
-	return nil, nil, false
+	return bisectMessage(message, metricSplitFields)
 }

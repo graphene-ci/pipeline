@@ -3,6 +3,7 @@ package obs
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os/exec"
 	"strings"
@@ -18,10 +19,23 @@ func emit(ctx context.Context, sev otellog.Severity, msg string, attrs []KV) {
 	logger := global.GetLoggerProvider().Logger("graphene.obs")
 	var rec otellog.Record
 	rec.SetSeverity(sev)
-	rec.SetBody(attribute.StringValue(msg))
+	rec.SetBody(attribute.StringValue(capBody(msg)))
 	rec.AddAttributes(ctxAttrs(ctx)...)
 	rec.AddAttributes(attrs...)
 	logger.Emit(ctx, rec)
+}
+
+// maxLogBody bounds one record's body. It is what makes the export queue
+// and an export request bounded in BYTES, not just in records; a caller
+// with a longer line (a job's output) cuts it into records itself.
+const maxLogBody = 16 << 10
+
+func capBody(msg string) string {
+	if len(msg) <= maxLogBody {
+		return msg
+	}
+	kept := strings.ToValidUTF8(msg[:maxLogBody], "")
+	return fmt.Sprintf("%s …[+%d bytes]", kept, len(msg)-len(kept))
 }
 
 // KV is an attribute (alias for readability at call sites).
