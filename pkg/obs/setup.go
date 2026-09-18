@@ -81,7 +81,8 @@ func Setup(ctx context.Context, cfg Config) (func(context.Context) error, error)
 	// Keep every serialized OTLP chunk below the server's 4 MiB gRPC limit.
 	metricOpts := []otlpmetricgrpc.Option{otlpmetricgrpc.WithEndpoint(cfg.Endpoint), otlpmetricgrpc.WithHeaders(headers),
 		otlpmetricgrpc.WithDialOption(grpc.WithChainUnaryInterceptor(exportMetricChunks))}
-	logOpts := []otlploggrpc.Option{otlploggrpc.WithEndpoint(cfg.Endpoint), otlploggrpc.WithHeaders(headers)}
+	logOpts := []otlploggrpc.Option{otlploggrpc.WithEndpoint(cfg.Endpoint), otlploggrpc.WithHeaders(headers),
+		otlploggrpc.WithDialOption(grpc.WithChainUnaryInterceptor(exportLogChunks))}
 	if cfg.Insecure {
 		traceOpts = append(traceOpts, otlptracegrpc.WithInsecure())
 		metricOpts = append(metricOpts, otlpmetricgrpc.WithInsecure())
@@ -105,7 +106,16 @@ func Setup(ctx context.Context, cfg Config) (func(context.Context) error, error)
 	mp := sdkmetric.NewMeterProvider(
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExp, sdkmetric.WithInterval(15*time.Second))),
 		sdkmetric.WithResource(res))
-	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewBatchProcessor(logExp)), sdklog.WithResource(res))
+	// Logs: a wider queue than the SDK's default, and a ledger around it —
+	// see log_ledger.go for why and for the numbers.
+	ledger := &logLedger{}
+	meter := mp.Meter("graphene.obs")
+	if err := ledger.observe(meter); err != nil {
+		return nil, err
+	}
+	batcher := sdklog.NewBatchProcessor(ledgerExporter{Exporter: logExp, ledger: ledger},
+		sdklog.WithMaxQueueSize(logQueueSize), sdklog.WithExportMaxBatchSize(logBatchSize))
+	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(ledgerProcessor{Processor: batcher, ledger: ledger}), sdklog.WithResource(res))
 
 	otel.SetTracerProvider(tp)
 	otel.SetMeterProvider(mp)
@@ -115,6 +125,10 @@ func Setup(ctx context.Context, cfg Config) (func(context.Context) error, error)
 		propagation.TraceContext{}, propagation.Baggage{}))
 
 	return func(ctx context.Context) error {
-		return errors.Join(tp.Shutdown(ctx), mp.Shutdown(ctx), lp.Shutdown(ctx))
+		// Logs first: after the flush the ledger's loss is exact, and its
+		// report still has a metric reader and a log pipeline to go through.
+		flushErr := lp.ForceFlush(ctx)
+		ledger.report(ctx, lp, meter)
+		return errors.Join(flushErr, lp.Shutdown(ctx), mp.Shutdown(ctx), tp.Shutdown(ctx))
 	}, nil
 }

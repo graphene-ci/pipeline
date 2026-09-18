@@ -96,6 +96,9 @@ func TestSetupExportsLargeMetricCollection(t *testing.T) {
 			require.Equal(t, "test-run", attrs[AttrRun])
 			require.Equal(t, "test-agent", attrs[AttrAgent])
 			for _, scope := range resource.GetScopeMetrics() {
+				if scope.GetScope().GetName() == "graphene.obs" {
+					continue // the log ledger's own counters ride along with every collection
+				}
 				require.Equal(t, "large-scrape", scope.GetScope().GetName())
 				for _, instrument := range scope.GetMetrics() {
 					for _, point := range instrument.GetGauge().GetDataPoints() {
