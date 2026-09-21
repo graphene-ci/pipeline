@@ -59,6 +59,7 @@ type World struct {
 	blobs        map[string][]byte
 	failures     map[ref.OwnerRef]error
 	calls        []Call
+	seq          int64
 	events       []Event
 	outcomes     map[ref.OwnerRef]string
 	prepared     bool
@@ -66,12 +67,35 @@ type World struct {
 	converter    converter.DataConverter
 }
 
-// Call records dispatch routing and serialized arguments, without activity bodies.
+// Call records one activity dispatch and how it ended, without activity
+// bodies. The simulator answers most activities itself, below every other
+// interceptor — so this record is the one place their outcome can be read.
+//
+// Seq and DoneSeq come from ONE counter shared by dispatches and
+// completions: virtual time stands still while a workflow task runs, so
+// many events carry the same Time, and the counter is what orders them
+// causally. A dispatch is one Call whatever its retries: attempts happen
+// under the future, and the outcome is the future's.
 type Call struct {
 	Name      string
 	TaskQueue string
 	Args      json.RawMessage
 	Time      time.Time
+	// Seq orders the dispatch among all dispatches and completions.
+	Seq int64
+	// Done is when the future settled; zero while the call is pending —
+	// a run that ended first leaves it so.
+	Done time.Time
+	// DoneSeq orders the completion in the same counter as Seq.
+	DoneSeq int64
+	// Result is the JSON payload on success; empty for an activity that
+	// returns only an error. (omitempty: Calls hands out a JSON-cloned
+	// snapshot, and an empty RawMessage would come back as "null".)
+	Result json.RawMessage `json:",omitempty"`
+	// Err is the failure message, "" on success.
+	Err string
+	// Canceled marks a future that ended by cancellation (Err is set too).
+	Canceled bool
 }
 
 // Install attaches the simulator and production cleanup interceptor. Supply any
@@ -245,16 +269,19 @@ func (o *outbound) ExecuteActivity(ctx workflow.Context, name string, args ...an
 		return f
 	}
 	w.mu.Lock()
-	w.calls = append(w.calls, Call{Name: name, TaskQueue: workflow.GetActivityOptions(ctx).TaskQueue, Args: raw, Time: workflow.Now(ctx)})
+	w.seq++
+	index := len(w.calls)
+	w.calls = append(w.calls, Call{Name: name, TaskQueue: workflow.GetActivityOptions(ctx).TaskQueue, Args: raw, Time: workflow.Now(ctx), Seq: w.seq})
 	w.mu.Unlock()
 	if w.mockedAgents[string(Agent(ctx))+"/"+name] {
-		return o.Next.ExecuteActivity(ctx, name, args...)
+		return o.observe(ctx, index, o.Next.ExecuteActivity(ctx, name, args...))
 	}
 	fn, ok := w.handlers[name]
 	if !ok {
-		return o.Next.ExecuteActivity(ctx, name, args...)
+		return o.observe(ctx, index, o.Next.ExecuteActivity(ctx, name, args...))
 	}
 	fut, set := workflow.NewFuture(ctx)
+	defer o.observe(ctx, index, fut)
 	if strings.HasPrefix(name, "server.") && workflow.GetActivityOptions(ctx).TaskQueue != wire.ServerQueue {
 		set.SetError(fmt.Errorf("service activity %s dispatched to %q instead of %q", name, workflow.GetActivityOptions(ctx).TaskQueue, wire.ServerQueue))
 		return fut
@@ -276,6 +303,32 @@ func (o *outbound) ExecuteActivity(ctx workflow.Context, name string, args ...an
 		}
 		payload, encodeErr := w.converter.ToPayloads(value)
 		set.Set(payload, encodeErr)
+	})
+	return fut
+}
+
+// observe writes the call's outcome into its record once the future
+// settles, on every path alike — the simulator's own handler, a mock, a
+// refusal. It reads the future and never touches it: the caller gets the
+// same future back.
+func (o *outbound) observe(ctx workflow.Context, index int, fut workflow.Future) workflow.Future {
+	w := o.world
+	workflow.Go(ctx, func(gctx workflow.Context) {
+		// The error first, on its own: decoding an empty payload fails
+		// too, and that must not read as the activity failing.
+		err := fut.Get(gctx, nil)
+		var result json.RawMessage
+		if err == nil {
+			_ = fut.Get(gctx, &result)
+		}
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		w.seq++
+		call := &w.calls[index]
+		call.Done, call.DoneSeq, call.Result = workflow.Now(gctx), w.seq, result
+		if err != nil {
+			call.Err, call.Canceled = err.Error(), temporal.IsCanceledError(err)
+		}
 	})
 	return fut
 }
