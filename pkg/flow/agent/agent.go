@@ -119,8 +119,10 @@ func Definition(opts Options) *entdefine.Definition[pipeline.AgentSpec, State] {
 		entdefine.WithInit[pipeline.AgentSpec, State](func(ctx workflow.Context, spec pipeline.AgentSpec) (State, error) {
 			return initMachine(ctx, opts, spec)
 		}),
-		// No finalizer: the record owns no machine — it never created one.
-		// Deleting the record leaves the real machine to whoever made it.
+		// The record owns no machine — it never created one, and deleting
+		// it leaves the real machine to whoever made it. The finalizer only
+		// closes the record's own books.
+		entdefine.WithFinalize[pipeline.AgentSpec, State](finalizeMachine),
 		entdefine.WithReconcileEvery[pipeline.AgentSpec, State](opts.ReconcileEvery, reconcileMachine),
 		entdefine.WithSearchAttributes[pipeline.AgentSpec, State](true),
 	)
@@ -251,6 +253,18 @@ func initMachine(ctx workflow.Context, opts Options, spec pipeline.AgentSpec) (S
 		}
 	}
 	return st, fmt.Errorf("agent did not connect within %s", opts.ConnectTimeout)
+}
+
+// finalizeMachine is the record's last word. A deleted record is still
+// read by name, and "connected" there means "this record can take work":
+// left at its last live value, a record that is gone would go on saying
+// yes. The agent PROCESS may well still be connected — that is the
+// machine's business; what it knew (addresses, facts, capabilities) stays
+// as the record's history. No activity runs here: nothing on the machine
+// is touched.
+func finalizeMachine(_ workflow.Context, st *State) error {
+	st.AgentConnected = false
+	return nil
 }
 
 func reconcileMachine(ctx workflow.Context, ec *entdefine.Ctx[pipeline.AgentSpec, State]) error {
