@@ -296,8 +296,8 @@ func wrap[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) fu
 		defer func() {
 			if p := recover(); p != nil {
 				if rf, ok := p.(resourceFailure); ok {
-					err = rf.err
-					failure = err.Error()
+					failure = rf.err.Error()
+					err = withPartial(rf.err, result)
 					return
 				}
 				panic(p)
@@ -314,7 +314,7 @@ func wrap[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error)) fu
 		result, err = fn(Context{Context: wctx, pipelineId: pipelineId}, params)
 		if err != nil {
 			failure = err.Error()
-			return result, err
+			return result, withPartial(err, result)
 		}
 		outcome, finished = result, true
 		return result, err
@@ -371,4 +371,21 @@ func undiscoveredActivity(ctx context.Context, _ converter.EncodedValues) (any, 
 	return nil, temporal.NewNonRetryableApplicationError(
 		fmt.Sprintf("activity %q was not discovered by the registration pass: keep its declaration reachable on the optimistic zero path (no branches on live values before it)", name),
 		"undiscovered-activity", nil)
+}
+
+// FailureType names the application error a failed run closes with.
+const FailureType = "PipelineFailed"
+
+// withPartial carries the run's PARTIAL result out with its error. Temporal
+// keeps only the failure of a failed workflow, and a run that collected
+// half its numbers before a step broke has said something worth keeping:
+// the result rides in the failure's details, where the door reads it back
+// as the run's state. The cause stays wrapped for errors.Is and errors.As.
+func withPartial[R any](err error, result R) error {
+	var app *temporal.ApplicationError
+	if errors.As(err, &app) && app.HasDetails() {
+		// Already carrying details of its own: not ours to overwrite.
+		return err
+	}
+	return temporal.NewApplicationErrorWithCause(err.Error(), FailureType, err, result)
 }

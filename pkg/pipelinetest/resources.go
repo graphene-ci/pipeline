@@ -28,6 +28,9 @@ type Resource struct {
 	Flows     []pipeline.Flow
 	KeepUntil time.Time
 	Foreign   bool
+	// From is who handed the record to its current owner (a transfer's
+	// origin); empty for a record still under its creator.
+	From ref.OwnerRef
 }
 
 // Event is a lifecycle transition, ordered by the workflow scheduler.
@@ -84,7 +87,38 @@ func (w *World) Declare(ctx workflow.Context, record Resource) error {
 	}
 	w.resources[record.Ref] = &copy
 	w.events = append(w.events, Event{Resource: record.Ref, Action: "declare", Time: workflow.Now(ctx)})
+	hooks := append([]func(Resource){}, w.onDeclare...)
+	w.mu.Unlock()
+	// Hooks run outside the lock: a hook that connects the declared
+	// agent or readies the object calls back into the world.
+	for _, hook := range hooks {
+		hook(clone(copy))
+	}
+	w.mu.Lock()
 	return nil
+}
+
+// OnDeclare registers a hook called with every record as it is declared —
+// the way a test meets objects it did not name in advance: connect the
+// agent, set the object's observed state, count what a RunSpec produced.
+// The hook runs on the workflow's goroutine, after the record exists.
+func (w *World) OnDeclare(fn func(Resource)) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.onDeclare = append(w.onDeclare, fn)
+}
+
+// Resources returns a detached snapshot of every record the world knows,
+// deleted ones included, ordered by ref.
+func (w *World) Resources() []Resource {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := make([]Resource, 0, len(w.resources))
+	for _, r := range w.resources {
+		out = append(out, clone(*r))
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Ref < out[j].Ref })
+	return out
 }
 
 // Ready publishes outputs after the adapter's readiness checks have passed.
@@ -217,9 +251,26 @@ func (w *World) transfer(ctx workflow.Context, req wire.TransferResourceRequest)
 		parent = next.Owner
 	}
 	r.Owner = req.NewOwner
+	r.From = ref.OwnerRef(req.From)
+	if r.From == "" {
+		// The server stamps the calling workflow when the request says
+		// nothing; the model does the same.
+		r.From = RunOwner(ctx)
+	}
 	r.KeepUntil = time.Time{}
 	if req.Keep > 0 {
 		r.KeepUntil = workflow.Now(ctx).Add(req.Keep)
+		// The stand's timer runs in VIRTUAL time: the holding expires
+		// while the run may still be going, as it does on a real stand.
+		// Advance after the run covers what the run did not wait out.
+		name := r.Ref
+		w.Env.RegisterDelayedCallback(func() {
+			w.mu.Lock()
+			defer w.mu.Unlock()
+			if held := w.resources[name]; held != nil && held.Phase != "deleted" && !held.KeepUntil.IsZero() && !w.Env.Now().Before(held.KeepUntil) {
+				w.deleteTree(name, w.Env.Now())
+			}
+		}, req.Keep)
 	}
 	w.events = append(w.events, Event{Resource: r.Ref, Action: "transfer", Time: workflow.Now(ctx)})
 	return nil

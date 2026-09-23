@@ -197,7 +197,7 @@ func adoptChildren(ctx Context, parent ref.OwnerRef, children []ref.OwnerRef) {
 	}
 	workflow.Go(ctx, func(gctx workflow.Context) {
 		for _, child := range children {
-			req := wire.TransferResourceRequest{Resource: child, NewOwner: parent}
+			req := wire.TransferResourceRequest{Resource: child, NewOwner: parent, From: "run/" + string(ctx.RunId())}
 			if err := workflow.ExecuteActivity(serverCtx(gctx), wire.TransferResourceActivity, req).Get(gctx, nil); err != nil {
 				workflow.GetLogger(gctx).Error("child claim failed",
 					"parent", string(parent), "child", string(child), "error", err)

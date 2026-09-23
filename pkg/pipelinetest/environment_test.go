@@ -3,6 +3,7 @@ package pipelinetest_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -412,4 +413,97 @@ func TestCallsMarkCancellation(t *testing.T) {
 	require.True(t, slow[0].Canceled)
 	require.NotEmpty(t, slow[0].Err)
 	require.Equal(t, time.Second, slow[0].Done.Sub(slow[0].Time))
+}
+
+// A holding names the run that handed it over: whoever manages the stand
+// tells one run's leftovers from the next's.
+func TestToStandNamesTheHolder(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	wf := pipelinetest.Workflow(w, "holder", func(ctx pipeline.Context, _ struct{}) (bool, error) {
+		a := pipeline.NewArtifact(ctx, "report", artifact.FromBytes([]byte("x")))
+		a.Ready(ctx)
+		pipeline.ToStand(ctx, a, pipeline.KeepFor(time.Hour))
+		return true, nil
+	})
+	w.Env.ExecuteWorkflow(wf, struct{}{})
+	require.NoError(t, w.Env.GetWorkflowError())
+	r, ok := w.Resource("artifact/report")
+	require.True(t, ok)
+	require.Equal(t, ref.OwnerRef("stand/holder"), r.Owner)
+	require.Equal(t, ref.OwnerRef("run/test-holder"), r.From)
+}
+
+// A test that does not know the names a RunSpec will produce meets them as
+// they are declared — and can list what the run left behind.
+func TestOnDeclareMeetsUnnamedRecords(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	var declared []ref.OwnerRef
+	w.OnDeclare(func(r pipelinetest.Resource) {
+		declared = append(declared, r.Ref)
+		if strings.HasPrefix(string(r.Ref), "agent/") {
+			w.Connect(id.AgentId(strings.TrimPrefix(string(r.Ref), "agent/")))
+		}
+	})
+	wf := pipelinetest.Workflow(w, "meet", func(ctx pipeline.Context, _ struct{}) (bool, error) {
+		a := pipeline.NewAgent(ctx, "box-7")
+		a.Ready(ctx)
+		return true, nil
+	})
+	w.Env.ExecuteWorkflow(wf, struct{}{})
+	require.NoError(t, w.Env.GetWorkflowError(), "the hook connected the agent nobody named in the test")
+	require.Equal(t, []ref.OwnerRef{"agent/box-7"}, declared)
+	all := w.Resources()
+	require.Len(t, all, 1)
+	require.Equal(t, ref.OwnerRef("agent/box-7"), all[0].Ref)
+	require.Equal(t, "deleted", all[0].Phase, "Resources lists deleted records too")
+}
+
+// A stand's TTL runs in virtual time: a holding expires while the run still
+// goes, the way it does on a real stand.
+func TestStandTTLExpiresDuringTheRun(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	var midway string
+	wf := pipelinetest.Workflow(w, "ttl", func(ctx pipeline.Context, _ struct{}) (bool, error) {
+		a := pipeline.NewArtifact(ctx, "report", artifact.FromBytes([]byte("x")))
+		a.Ready(ctx)
+		pipeline.ToStand(ctx, a, pipeline.KeepFor(time.Hour))
+		if err := workflow.Sleep(ctx, 2*time.Hour); err != nil {
+			return false, err
+		}
+		r, _ := w.Resource("artifact/report")
+		midway = r.Phase
+		return true, nil
+	})
+	w.Env.ExecuteWorkflow(wf, struct{}{})
+	require.NoError(t, w.Env.GetWorkflowError())
+	require.Equal(t, "deleted", midway, "the holding expired an hour into a two-hour run")
+	w.AssertNoLeaks(t)
+}
+
+// A failed run keeps what it collected: the partial result rides in the
+// failure's details, the error stays readable and its cause stays wrapped.
+func TestFailedRunCarriesPartialResult(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	type result struct {
+		Passed int `json:"passed"`
+	}
+	sentinel := errors.New("bench exploded")
+	wf := pipelinetest.Workflow(w, "partial", func(ctx pipeline.Context, _ struct{}) (result, error) {
+		return result{Passed: 3}, sentinel
+	})
+	w.Env.ExecuteWorkflow(wf, struct{}{})
+	err := w.Env.GetWorkflowError()
+	require.Error(t, err)
+	var app *temporal.ApplicationError
+	require.ErrorAs(t, err, &app)
+	require.Equal(t, pipeline.FailureType, app.Type())
+	require.Contains(t, app.Message(), "bench exploded")
+	var partial result
+	require.NoError(t, app.Details(&partial))
+	require.Equal(t, 3, partial.Passed)
+	require.Equal(t, "failure", w.Outcome("run/test-partial"))
 }

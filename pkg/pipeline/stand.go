@@ -21,10 +21,14 @@ func ToStand(ctx Context, h Handle, opts ...TransferOption) {
 	for _, opt := range opts {
 		opt(&o)
 	}
+	// From names this run as the holder: the stand's holdings are read by
+	// whoever manages the stand (a UI extending or releasing a stay), and
+	// a holding without an origin cannot be told apart from the next run's.
 	req := wire.TransferResourceRequest{
 		Resource: h.ResourceRef(),
 		NewOwner: wire.StandOwner(ctx.pipelineId),
 		Keep:     o.keep,
+		From:     "run/" + string(ctx.RunId()),
 	}
 	if err := workflow.ExecuteActivity(serverCtx(ctx), wire.TransferResourceActivity, req).Get(ctx, nil); err != nil {
 		panic(resourceFailure{err: err})

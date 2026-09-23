@@ -59,6 +59,7 @@ type World struct {
 	blobs        map[string][]byte
 	failures     map[ref.OwnerRef]error
 	calls        []Call
+	onDeclare    []func(Resource)
 	seq          int64
 	events       []Event
 	outcomes     map[ref.OwnerRef]string
