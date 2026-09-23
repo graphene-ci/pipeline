@@ -5,7 +5,7 @@ go 1.25.7
 require (
 	github.com/go-playground/validator/v10 v10.30.4
 	github.com/google/go-containerregistry v0.21.9
-	github.com/gopherex/schemapb/go v0.0.0-20260904155309-67a92c03b7e6
+	github.com/gopherex/schemapb/go v0.0.0-20260923103231-06c47e842fa3
 	github.com/graphene-ci/temporal-entity v0.0.0-20260824103956-3919c84e4abb
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3
 	github.com/stretchr/testify v1.12.0
