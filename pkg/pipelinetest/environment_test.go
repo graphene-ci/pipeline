@@ -507,3 +507,21 @@ func TestFailedRunCarriesPartialResult(t *testing.T) {
 	require.Equal(t, 3, partial.Passed)
 	require.Equal(t, "failure", w.Outcome("run/test-partial"))
 }
+
+// WithFlow on an agent is not lost: the simulator's record carries the edge
+// the way the server's does.
+func TestAgentFlowsReachTheRecord(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	w.ConnectAfter("box", 0)
+	wf := pipelinetest.Workflow(w, "agentflows", func(ctx pipeline.Context, _ struct{}) (bool, error) {
+		a := pipeline.NewAgent(ctx, "box", pipeline.WithFlow("10.0.0.5", pipeline.TCP, "postgres", pipeline.FlowPort(5432)))
+		a.Ready(ctx)
+		return true, nil
+	})
+	w.Env.ExecuteWorkflow(wf, struct{}{})
+	require.NoError(t, w.Env.GetWorkflowError())
+	r, ok := w.Resource("agent/box")
+	require.True(t, ok)
+	require.Equal(t, []pipeline.Flow{{To: "10.0.0.5", Protocol: pipeline.TCP, Port: 5432, Label: "postgres"}}, r.Flows)
+}

@@ -201,7 +201,7 @@ func (w *World) declareAgent(ctx workflow.Context, args []any) (any, error) {
 	}
 	name := ref.OwnerRef("agent/" + string(agent))
 	raw, _ := json.Marshal(spec)
-	if err := w.Declare(ctx, Resource{Ref: name, Owner: spec.Owner, Spec: raw, Labels: spec.Labels}); err != nil {
+	if err := w.Declare(ctx, Resource{Ref: name, Owner: spec.Owner, Spec: raw, Labels: spec.Labels, Flows: spec.Flows}); err != nil {
 		return nil, err
 	}
 	state, err := w.waitAgent(ctx, agent, spec.Needs, 30*time.Minute)

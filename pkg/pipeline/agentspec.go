@@ -3,6 +3,7 @@ package pipeline
 import (
 	"errors"
 
+	"github.com/graphene-ci/pipeline/pkg/flow/ownership"
 	"github.com/graphene-ci/pipeline/pkg/ref"
 	"github.com/graphene-ci/pipeline/pkg/wire"
 )
@@ -53,6 +54,11 @@ type AgentSpec struct {
 	// Needs are capability requirements: readiness additionally waits
 	// until each is present, ready, and matching.
 	Needs []wire.NeedSpec `json:"needs,omitempty"`
+	// Flows are the edges the pipeline declared FROM this agent (WithFlow,
+	// WithFlowTo) — a machine that pushes logs somewhere, pulls from a
+	// peer. The agent's own virtual edges to the server are added by the
+	// record, not carried here.
+	Flows []ownership.Flow `json:"flows,omitempty"`
 }
 
 // Validate checks the spec structurally (deterministic).

@@ -208,9 +208,17 @@ func virtualAgentFlows() []ownership.Flow {
 	}
 }
 
+// recordFlows are the record's edges: the ones the pipeline declared from
+// this machine (WithFlow, WithFlowTo), then the virtual ones every agent
+// has to the server.
+func recordFlows(spec pipeline.AgentSpec) []ownership.Flow {
+	return append(append([]ownership.Flow{}, spec.Flows...), virtualAgentFlows()...)
+}
+
 func initMachine(ctx workflow.Context, opts Options, spec pipeline.AgentSpec) (State, error) {
 	var st State
-	st.Flows = virtualAgentFlows()
+	// Set BEFORE Init, which mirrors the edges into visibility.
+	st.Flows = recordFlows(spec)
 	// Set the owner at INIT, before the (possibly long) wait for the agent
 	// to connect: a run that declares this agent owns it from the first
 	// moment, so a run torn down while the machine is still coming up still

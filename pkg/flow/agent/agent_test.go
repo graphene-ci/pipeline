@@ -4,6 +4,10 @@ import (
 	"testing"
 
 	"go.temporal.io/sdk/workflow"
+
+	"github.com/graphene-ci/pipeline/pkg/pipeline"
+
+	"github.com/graphene-ci/pipeline/pkg/flow/ownership"
 )
 
 type fakeRegistry struct{ names []string }
@@ -38,5 +42,24 @@ func TestFinalizeClosesTheRecord(t *testing.T) {
 	}
 	if len(st.Addresses) != 1 {
 		t.Fatalf("history was wiped: %v", st.Addresses)
+	}
+}
+
+// An edge declared from the agent reaches its record, ahead of the virtual
+// ones every agent has — an option must never be lost in silence.
+func TestDeclaredFlowsReachTheRecord(t *testing.T) {
+	declared := ownership.Flow{To: "10.0.0.5", Protocol: ownership.TCP, Port: 5432, Label: "postgres"}
+	flows := recordFlows(pipeline.AgentSpec{Flows: []ownership.Flow{declared}})
+	if len(flows) != 1+len(virtualAgentFlows()) {
+		t.Fatalf("flows: %+v", flows)
+	}
+	if flows[0] != declared {
+		t.Fatalf("declared edge lost: %+v", flows[0])
+	}
+	if !flows[len(flows)-1].Virtual {
+		t.Fatalf("virtual edges must follow: %+v", flows)
+	}
+	if got := recordFlows(pipeline.AgentSpec{}); len(got) != len(virtualAgentFlows()) {
+		t.Fatalf("no declared edges: %+v", got)
 	}
 }

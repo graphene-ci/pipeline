@@ -145,7 +145,7 @@ func NewAgent(ctx Context, name string, opts ...ResourceOption) AgentHandle {
 	if owner == "" {
 		owner = ref.RunOwner(ctx.RunId())
 	}
-	spec := AgentSpec{Owner: owner, Labels: o.Labels, Needs: o.Needs}
+	spec := AgentSpec{Owner: owner, Labels: o.Labels, Needs: o.Needs, Flows: o.Flows}
 	sctx := serverCtx(ctx)
 	h.Resource = NewResource[AgentState](ctx, self, workflow.ExecuteActivity(sctx, wire.DeclareAgentActivity, agentId, spec))
 	h.userData = workflow.ExecuteActivity(sctx, wire.AgentUserDataActivity, agentId)
@@ -166,7 +166,7 @@ func NewAgentViaSSH(ctx Context, name string, install SSHInstall, opts ...Resour
 		return h
 	}
 	o := BuildResourceOptions(ctx, opts)
-	spec := AgentSpec{SSH: &install, Owner: o.Parent, Labels: o.Labels, Needs: o.Needs}
+	spec := AgentSpec{SSH: &install, Owner: o.Parent, Labels: o.Labels, Needs: o.Needs, Flows: o.Flows}
 	sctx := serverCtx(ctx)
 	h.Resource = NewResource[AgentState](ctx, self, workflow.ExecuteActivity(sctx, wire.DeclareAgentActivity, agentId, spec))
 	h.userData = workflow.ExecuteActivity(sctx, wire.AgentUserDataActivity, agentId)
