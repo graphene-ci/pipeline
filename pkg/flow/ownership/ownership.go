@@ -124,6 +124,37 @@ func Register[Spec, S any](def *entdefine.Definition[Spec, S], get func(*S) *Sta
 	})
 }
 
+// Mirror writes the ownership state into the record's search attributes
+// — owner, keep-until and the declared flows. Init and the transfer
+// command call it; a kind that fills Flows after Init calls it itself,
+// or the listing shows the record without its edges.
+func Mirror(ctx workflow.Context, st *State) { upsert(ctx, st) }
+
+// MirrorFlows renders the flows as the keywords visibility indexes.
+func MirrorFlows(flows []Flow) []string {
+	out := make([]string, 0, len(flows))
+	for _, f := range flows {
+		out = append(out, wire.EncodeFlow(wire.EncodedFlow{
+			To: f.To, Protocol: string(f.Protocol), Port: f.Port, Label: f.Label, Virtual: f.Virtual,
+		}))
+	}
+	return out
+}
+
+// FlowsFromMirror parses the keywords back into flows; a keyword that is
+// not one is skipped.
+func FlowsFromMirror(keywords []string) []Flow {
+	out := make([]Flow, 0, len(keywords))
+	for _, k := range keywords {
+		e, ok := wire.DecodeFlow(k)
+		if !ok {
+			continue
+		}
+		out = append(out, Flow{To: e.To, Protocol: Protocol(e.Protocol), Port: e.Port, Label: e.Label, Virtual: e.Virtual})
+	}
+	return out
+}
+
 func upsert(ctx workflow.Context, st *State) {
 	attrs := []temporal.SearchAttributeUpdate{
 		wire.SearchAttrOwner.ValueSet(string(st.Owner)),
@@ -132,6 +163,13 @@ func upsert(ctx workflow.Context, st *State) {
 		attrs = append(attrs, wire.SearchAttrKeepUntil.ValueSet(*st.KeepUntil))
 	} else {
 		attrs = append(attrs, wire.SearchAttrKeepUntil.ValueUnset())
+	}
+	// The edges ride along: a topology is drawn from a listing, and the
+	// deleted records of a finished run have no other way to tell theirs.
+	if len(st.Flows) > 0 {
+		attrs = append(attrs, wire.SearchAttrFlows.ValueSet(MirrorFlows(st.Flows)))
+	} else {
+		attrs = append(attrs, wire.SearchAttrFlows.ValueUnset())
 	}
 	// Visibility is a mirror, not the record: an installation without
 	// the custom attributes still works, only listing degrades.

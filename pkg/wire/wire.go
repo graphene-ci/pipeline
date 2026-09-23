@@ -6,6 +6,7 @@ package wire
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -218,7 +219,57 @@ var (
 	// SearchAttrKeepUntil carries the stand-TTL deadline; the server's
 	// sweeper deletes what expired.
 	SearchAttrKeepUntil = temporal.NewSearchAttributeKeyTime("EntityKeepUntil")
+	// SearchAttrFlows mirrors the record's declared outgoing edges, one
+	// keyword per flow (see EncodeFlow): the door draws a topology from a
+	// listing alone — the deleted records of a finished run included,
+	// whose state no worker can answer for any more.
+	SearchAttrFlows = temporal.NewSearchAttributeKeyKeywordList("EntityFlows")
 )
+
+// flowSep separates the fields of an encoded flow. None of them may
+// carry it: a ref, a protocol and a port cannot, a label is cut at it.
+const flowSep = "|"
+
+// EncodedFlow is the visibility form of one edge: `to|protocol|port|label|virtual`.
+// Fields are positional so a row parses without a schema; the last two
+// are "" and "" when unset, "1" marks a virtual edge.
+type EncodedFlow struct {
+	To       string
+	Protocol string
+	Port     int
+	Label    string
+	Virtual  bool
+}
+
+// EncodeFlow renders the edge as one search-attribute keyword.
+func EncodeFlow(f EncodedFlow) string {
+	port, virtual := "", ""
+	if f.Port > 0 {
+		port = strconv.Itoa(f.Port)
+	}
+	if f.Virtual {
+		virtual = "1"
+	}
+	label, _, _ := strings.Cut(f.Label, flowSep)
+	return strings.Join([]string{f.To, f.Protocol, port, label, virtual}, flowSep)
+}
+
+// DecodeFlow parses a keyword EncodeFlow produced; false for anything else.
+func DecodeFlow(s string) (EncodedFlow, bool) {
+	parts := strings.Split(s, flowSep)
+	if len(parts) != 5 || parts[0] == "" {
+		return EncodedFlow{}, false
+	}
+	port := 0
+	if parts[2] != "" {
+		n, err := strconv.Atoi(parts[2])
+		if err != nil {
+			return EncodedFlow{}, false
+		}
+		port = n
+	}
+	return EncodedFlow{To: parts[0], Protocol: parts[1], Port: port, Label: parts[3], Virtual: parts[4] == "1"}, true
+}
 
 // TransferOwnerCmdName is the entity command every OWNED system resource
 // serves: give the resource (and so its subtree) to a new owner.
