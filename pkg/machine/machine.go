@@ -119,3 +119,21 @@ func hasEnv(env []string, key string) bool {
 	}
 	return false
 }
+
+// OTLPEndpoint is where a workload container on this machine sends its
+// telemetry: the executor's local OTLP intake (gRPC and HTTP on one
+// plaintext port), which stamps the run and forwards to the door under the
+// executor's own credential. Neither the door's address nor a token ever
+// reaches the container. Bridge asks for the address a container in a
+// docker bridge network reaches — the host's bridge IP; a container on the
+// host network uses the loopback one. Empty when no intake runs (a process
+// outside an executor).
+func OTLPEndpoint(bridge bool) string {
+	if bridge {
+		if ep := os.Getenv("GRAPHENE_OTLP_ENDPOINT_BRIDGE"); ep != "" {
+			return ep
+		}
+		return ""
+	}
+	return os.Getenv("GRAPHENE_OTLP_ENDPOINT")
+}

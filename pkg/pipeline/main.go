@@ -224,6 +224,18 @@ func serve[P, R any](pipelineId id.PipelineId, fn func(Context, P) (R, error), o
 		if err != nil {
 			return fmt.Errorf("%s: %w", wire.EnvAgentId, err)
 		}
+		// The machine's workload containers get a local OTLP intake: the
+		// executor stamps the run on their telemetry and forwards it under
+		// its own credential — no door address, no token in a container.
+		intake, err := obs.StartReceiver(context.Background(), obs.FromEnv())
+		if err != nil {
+			return fmt.Errorf("otlp intake: %w", err)
+		}
+		defer func() {
+			closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = intake.Close(closeCtx)
+		}()
 		w := worker.New(c, wire.AgentRunQueue(agentId, runId), worker.Options{
 			// Library resources (docker, k8s, ...) live their activities
 			// HERE: the obs interceptor is what makes a brought kind's

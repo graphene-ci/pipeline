@@ -59,7 +59,7 @@ The binary then offers `plan` (local, no server), `push` and `run`.
 | `pkg/activity` | agent actions and execution guarantees |
 | `pkg/artifact`, `pkg/file` | artifact and file sources |
 | `pkg/trigger` | manual, cron, webhook and upstream triggers |
-| `pkg/obs` | attributed telemetry from user code |
+| `pkg/obs` | attributed telemetry from user code; the executor's local OTLP intake for workload containers |
 | `pkg/id`, `pkg/ref`, `pkg/wire` | identifiers, references and wire conventions |
 | `pkg/flow/*` | durable system-resource definitions |
 
