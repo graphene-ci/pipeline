@@ -102,6 +102,9 @@ func Setup(ctx context.Context, cfg Config) (func(context.Context) error, error)
 		return nil, err
 	}
 
+	// Readings shipped with their own time and kind go through the same
+	// exporter and resource as the SDK's instruments.
+	setSink(metricExp, res)
 	tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(traceExp), sdktrace.WithResource(res))
 	mp := sdkmetric.NewMeterProvider(
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExp, sdkmetric.WithInterval(15*time.Second))),
@@ -125,6 +128,7 @@ func Setup(ctx context.Context, cfg Config) (func(context.Context) error, error)
 		propagation.TraceContext{}, propagation.Baggage{}))
 
 	return func(ctx context.Context) error {
+		setSink(nil, nil)
 		// Logs first: after the flush the ledger's loss is exact, and its
 		// report still has a metric reader and a log pipeline to go through.
 		flushErr := lp.ForceFlush(ctx)
