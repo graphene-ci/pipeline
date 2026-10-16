@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"go.temporal.io/sdk/temporal"
@@ -70,9 +71,10 @@ const (
 type Option func(*options)
 
 type options struct {
-	guarantee Guarantee
-	timeout   time.Duration
-	heartbeat time.Duration
+	guarantee   Guarantee
+	timeout     time.Duration
+	heartbeat   time.Duration
+	maxAttempts int
 }
 
 // WithGuarantee sets the execution guarantee.
@@ -83,6 +85,16 @@ func WithGuarantee(g Guarantee) Option {
 // WithTimeout bounds a single execution (default 10m).
 func WithTimeout(d time.Duration) Option {
 	return func(o *options) { o.timeout = d }
+}
+
+// WithMaxAttempts bounds an AtLeastOnce call to n executions in total:
+// work that keeps failing the same way — a cloud refusing for quota, a
+// target that is not coming back — fails the call instead of retrying
+// forever. A body can also end its own retries at once by returning
+// temporal.NewNonRetryableApplicationError. Zero or less is unbounded
+// (the default); AtMostOnce is one execution regardless.
+func WithMaxAttempts(n int) Option {
+	return func(o *options) { o.maxAttempts = n }
 }
 
 // WithHeartbeat distinguishes "still running" from "died" (default 30s).
@@ -151,6 +163,9 @@ func dispatch[Res any](ctx pipeline.Context, target Target, call Call[Res], opts
 			BackoffCoefficient: 2,
 			MaximumInterval:    time.Minute,
 		}
+		if o.maxAttempts > 0 {
+			actOpts.RetryPolicy.MaximumAttempts = int32(min(o.maxAttempts, math.MaxInt32)) //nolint:gosec // bounded above
+		}
 	}
 	fut := pipeline.DispatchOnAgent(ctx, target.AgentId(), actOpts, call.name, call.args...)
 	if o.guarantee == AtMostOnce {
@@ -184,8 +199,11 @@ func guaranteeNote(opts []Option) string {
 	for _, opt := range opts {
 		opt(&o)
 	}
-	if o.guarantee == AtMostOnce {
+	switch {
+	case o.guarantee == AtMostOnce:
 		return "at-most-once"
+	case o.maxAttempts > 0:
+		return fmt.Sprintf("at most %d attempts", o.maxAttempts)
 	}
 	return ""
 }

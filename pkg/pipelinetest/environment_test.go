@@ -64,6 +64,23 @@ func TestAtMostOnceUnknown(t *testing.T) {
 	w.AssertNoLeaks(t)
 }
 
+// WithMaxAttempts bounds an AtLeastOnce call: a body that keeps failing
+// the same way fails the call after n executions instead of forever.
+func TestActivityMaxAttempts(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	w.ConnectAfter("machine", 0)
+	wf := pipelinetest.Workflow(w, "bounded", func(ctx pipeline.Context, _ struct{}) (string, error) {
+		a := pipeline.NewAgent(ctx, "machine")
+		return pa.Activity(ctx, a, pa.Fn("work", dangerous, "input"), pa.WithMaxAttempts(3))
+	})
+	w.OnAgentActivity("machine", "work", mock.Anything, "input").Return("", errors.New("quota exceeded")).Times(3)
+	w.Env.ExecuteWorkflow(wf, struct{}{})
+	require.ErrorContains(t, w.Env.GetWorkflowError(), "quota exceeded")
+	w.Env.AssertExpectations(t)
+	w.AssertNoLeaks(t)
+}
+
 func TestActivityRetryAndRouting(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
