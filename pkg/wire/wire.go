@@ -20,6 +20,10 @@ import (
 // entity workflows and their activities run here.
 const ServerQueue = "graphene-server"
 
+// NamespaceHeader is the request header (gRPC metadata key) naming the
+// namespace a call acts in; without it the caller's own scope applies.
+const NamespaceHeader = "x-graphene-namespace"
+
 // AgentRunQueue names the task queue served by the user-code container
 // hosted by the agent for one run. The container is scoped to
 // (machine × run) and owned by the run: its version is the run's image

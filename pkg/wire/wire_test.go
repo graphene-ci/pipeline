@@ -10,3 +10,11 @@ func TestQueueNames(t *testing.T) {
 		t.Fatalf("RunQueue: %q", got)
 	}
 }
+
+// The TypeScript SDK and Studio send this exact header; the value is wire.
+func TestNamespaceHeader(t *testing.T) {
+	t.Parallel()
+	if NamespaceHeader != "x-graphene-namespace" {
+		t.Fatalf("NamespaceHeader: %q", NamespaceHeader)
+	}
+}

@@ -24,8 +24,8 @@
 
 - `pkg/id`, `pkg/ref` — базовая vocabulary без Temporal и без импортов других
   пакетов этого репозитория.
-- `pkg/wire` — межкомпонентные соглашения: queues, имена server activities и
-  search attributes.
+- `pkg/wire` — межкомпонентные соглашения: queues, имена server activities,
+  search attributes и заголовок namespace (`NamespaceHeader`).
 - `pkg/pipeline` — `Main`, handles ресурсов/агентов, run context, flows и
   встроенная CLI `plan`/`push`/`run`.
 - `pkg/pipelinetest` — изолированная тестовая модель контрактов; не импортирует

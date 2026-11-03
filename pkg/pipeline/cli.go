@@ -27,6 +27,7 @@ import (
 	"github.com/graphene-ci/pipeline/pkg/manifest"
 	workerplanev1 "github.com/graphene-ci/pipeline/pkg/proto/workerplane/v1"
 	"github.com/graphene-ci/pipeline/pkg/selfbuild"
+	"github.com/graphene-ci/pipeline/pkg/wire"
 )
 
 // runCLI handles the binary's subcommands; ok=false means no subcommand
@@ -245,7 +246,7 @@ type cliBearer struct {
 func (b cliBearer) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
 	metadata := map[string]string{"authorization": "Bearer " + b.token}
 	if b.namespace != "" {
-		metadata["x-graphene-namespace"] = b.namespace
+		metadata[wire.NamespaceHeader] = b.namespace
 	}
 	return metadata, nil
 }
