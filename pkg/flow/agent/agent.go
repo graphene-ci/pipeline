@@ -90,6 +90,24 @@ type MachineFacts struct {
 	OSReleaseLike    string           `json:"osReleaseLike,omitempty"`
 	OSReleaseVersion string           `json:"osReleaseVersion,omitempty"`
 	Interfaces       []InterfaceAddrs `json:"interfaces,omitempty"`
+	// Disks are the physical block devices: the machine's hardware key
+	// and what a mount record names by id.
+	Disks []Disk `json:"disks,omitempty"`
+}
+
+// Disk is one physical block device of the machine.
+type Disk struct {
+	// Name is the kernel name: "nvme0n1", "sda", "vdb".
+	Name       string `json:"name"`
+	SizeBytes  uint64 `json:"sizeBytes"`
+	Rotational bool   `json:"rotational,omitempty"`
+	// Transport is the bus: "nvme", "virtio", "scsi"...
+	Transport string `json:"transport,omitempty"`
+	Model     string `json:"model,omitempty"`
+	Serial    string `json:"serial,omitempty"`
+	// ById are the /dev/disk/by-id names of the whole disk — stable
+	// across reboots and renumbering.
+	ById []string `json:"byId,omitempty"`
 }
 
 // InterfaceAddrs is one interface and its addresses.
