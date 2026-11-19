@@ -63,6 +63,7 @@ type World struct {
 	seq          int64
 	events       []Event
 	outcomes     map[ref.OwnerRef]string
+	stands       map[id.StandId]bool
 	prepared     bool
 	advance      time.Duration
 	converter    converter.DataConverter
@@ -105,7 +106,7 @@ func Install(t TestingT, env *testsuite.TestWorkflowEnvironment, options ...work
 	t.Helper()
 	w := &World{Env: env, t: t, handlers: map[string]Handler{}, bodies: map[string]any{}, mockedAgents: map[string]bool{},
 		resources: map[ref.OwnerRef]*Resource{}, agents: map[id.AgentId]pipeline.AgentState{}, files: map[id.AgentId]map[string][]byte{},
-		blobs: map[string][]byte{}, failures: map[ref.OwnerRef]error{}, outcomes: map[ref.OwnerRef]string{}}
+		blobs: map[string][]byte{}, failures: map[ref.OwnerRef]error{}, outcomes: map[ref.OwnerRef]string{}, stands: map[id.StandId]bool{}}
 	w.converter = converter.GetDefaultDataConverter()
 	var opts worker.Options
 	if len(options) > 1 {

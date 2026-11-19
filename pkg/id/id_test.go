@@ -11,6 +11,7 @@ func TestValidate(t *testing.T) {
 		{name: "agent ok", err: AgentId("db-1.example").Validate()},
 		{name: "run ok", err: RunId("run-42-cell").Validate()},
 		{name: "pipeline ok", err: PipelineId("stroppy").Validate()},
+		{name: "stand ok", err: StandId("tpcc-lab").Validate()},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -29,6 +30,8 @@ func TestValidate(t *testing.T) {
 		{name: "slash agent", err: AgentId("a/run/b").Validate()},
 		{name: "slash run", err: RunId("r/1").Validate()},
 		{name: "slash pipeline", err: PipelineId("team/app").Validate()},
+		{name: "slash stand", err: StandId("lab/1").Validate()},
+		{name: "empty stand", err: StandId("").Validate()},
 	}
 	for _, c := range bad {
 		t.Run(c.name, func(t *testing.T) {

@@ -195,9 +195,26 @@ func (w *World) Outcome(run ref.OwnerRef) string {
 	return w.outcomes[run]
 }
 
+// Stand declares a named stand, as applying stand/<name> does on an
+// installation: OnStand transfers find it; a name never declared fails.
+func (w *World) Stand(name id.StandId) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.stands[name] = true
+}
+
 func (w *World) transfer(ctx workflow.Context, req wire.TransferResourceRequest) error {
 	if err := req.NewOwner.Validate(); err != nil {
 		return err
+	}
+	if req.Named {
+		name := id.StandId(strings.TrimPrefix(string(req.NewOwner), "stand/"))
+		w.mu.Lock()
+		exists := w.stands[name]
+		w.mu.Unlock()
+		if !exists {
+			return fmt.Errorf("stand %s does not exist: apply it first", name)
+		}
 	}
 	if req.Keep < 0 {
 		return fmt.Errorf("negative KeepFor")

@@ -22,6 +22,10 @@ type ArtifactId string
 // PipelineId identifies a registered pipeline.
 type PipelineId string
 
+// StandId names a stand: machines and resources that outlive the runs
+// using them.
+type StandId string
+
 // SecretId names a secret; only the name ever travels, never the value.
 type SecretId string
 
@@ -49,6 +53,9 @@ func (r RunId) Validate() error { return validate("run", string(r)) }
 
 // Validate reports whether the artifact id is well-formed.
 func (a ArtifactId) Validate() error { return validate("artifact", string(a)) }
+
+// Validate reports whether the stand id is well-formed.
+func (s StandId) Validate() error { return validate("stand", string(s)) }
 
 // Validate reports whether the pipeline id is well-formed.
 func (p PipelineId) Validate() error { return validate("pipeline", string(p)) }

@@ -7,6 +7,7 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/graphene-ci/pipeline/pkg/flow/ownership"
+	"github.com/graphene-ci/pipeline/pkg/id"
 	"github.com/graphene-ci/pipeline/pkg/ref"
 	"github.com/graphene-ci/pipeline/pkg/wire"
 )
@@ -272,7 +273,8 @@ func BuildResourceOptions(ctx Context, opts []ResourceOption) ResourceOptions {
 type TransferOption func(*transferOptions)
 
 type transferOptions struct {
-	keep time.Duration
+	keep  time.Duration
+	stand id.StandId
 }
 
 // KeepFor bounds the stay under the new owner: the owner deletes the
@@ -280,4 +282,11 @@ type transferOptions struct {
 // explicit delete.
 func KeepFor(d time.Duration) TransferOption {
 	return func(o *transferOptions) { o.keep = d }
+}
+
+// OnStand parks the resource on a NAMED stand instead of the pipeline's
+// own. The stand must exist (applied as stand/<name>); a missing one fails
+// the transfer rather than creating a stand from a typo.
+func OnStand(name id.StandId) TransferOption {
+	return func(o *transferOptions) { o.stand = name }
 }

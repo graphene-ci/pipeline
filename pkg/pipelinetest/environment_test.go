@@ -451,6 +451,45 @@ func TestToStandNamesTheHolder(t *testing.T) {
 	require.Equal(t, ref.OwnerRef("run/test-holder"), r.From)
 }
 
+// OnStand parks on a named stand that exists; a name never applied fails
+// the transfer instead of creating a stand from a typo.
+func TestOnStand(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		declared bool
+		fails    bool
+	}{
+		{name: "existing named stand", declared: true},
+		{name: "missing named stand", fails: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			w := newWorld(t)
+			if c.declared {
+				w.Stand("tpcc-lab")
+			}
+			wf := pipelinetest.Workflow(w, "park", func(ctx pipeline.Context, _ struct{}) (bool, error) {
+				a := pipeline.NewArtifact(ctx, "report", artifact.FromBytes([]byte("x")))
+				a.Ready(ctx)
+				pipeline.ToStand(ctx, a, pipeline.OnStand("tpcc-lab"))
+				return true, nil
+			})
+			w.Env.ExecuteWorkflow(wf, struct{}{})
+			err := w.Env.GetWorkflowError()
+			if c.fails {
+				require.ErrorContains(t, err, "stand tpcc-lab does not exist")
+				return
+			}
+			require.NoError(t, err)
+			r, ok := w.Resource("artifact/report")
+			require.True(t, ok)
+			require.Equal(t, ref.OwnerRef("stand/tpcc-lab"), r.Owner)
+		})
+	}
+}
+
 // A test that does not know the names a RunSpec will produce meets them as
 // they are declared — and can list what the run left behind.
 func TestOnDeclareMeetsUnnamedRecords(t *testing.T) {
