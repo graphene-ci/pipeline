@@ -100,6 +100,9 @@ type MachineFacts struct {
 	// Disks are the physical block devices: the machine's hardware key
 	// and what a mount record names by id.
 	Disks []Disk `json:"disks,omitempty"`
+	// KernelRelease is the running kernel ("6.8.0-45-generic"): what
+	// decides kernel features, which the distribution version does not.
+	KernelRelease string `json:"kernelRelease,omitempty"`
 }
 
 // Disk is one physical block device of the machine.
