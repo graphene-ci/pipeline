@@ -41,6 +41,10 @@ type State struct {
 	// Leaks are what records left on the machine when their removal gave
 	// up. A machine with leaks is dirty until they are cleared.
 	Leaks []Leak `json:"leaks,omitempty"`
+	// LeaksOverflow counts reports that arrived while Leaks was full. The
+	// listed leaks are never pushed out — they still need cleaning — and
+	// the overflow keeps the machine dirty until every leak is cleared.
+	LeaksOverflow int `json:"leaksOverflow,omitempty"`
 }
 
 // Leak is one leftover on the machine.
@@ -177,14 +181,13 @@ func (ClearLeaksCmd) Name() entity.CommandName { return "clear-leaks" }
 // Result binds the response type.
 func (ClearLeaksCmd) Result() LeaksRes { return LeaksRes{} }
 
-// LeaksRes reports the leaks left on the record.
+// LeaksRes reports the leaks left on the record, overflow included.
 type LeaksRes struct {
 	Count int `json:"count"`
 }
 
 // Leak bounds: the record's state rides every Continue-as-New, so what a
-// caller sends is capped. A machine with MaxLeaks leftovers is as dirty as
-// one with more; the newest are kept.
+// caller sends is capped. Past MaxLeaks a report is counted, not listed.
 const (
 	MaxLeaks     = 100
 	maxLeakRef   = 256
@@ -207,17 +210,19 @@ func reportLeak(ctx workflow.Context, ec *entdefine.Ctx[pipeline.AgentSpec, Stat
 			return LeaksRes{Count: len(st.Leaks)}, nil
 		}
 	}
-	st.Leaks = append(st.Leaks, l)
-	if over := len(st.Leaks) - MaxLeaks; over > 0 {
-		st.Leaks = append([]Leak(nil), st.Leaks[over:]...)
+	if len(st.Leaks) >= MaxLeaks {
+		st.LeaksOverflow++
+		return LeaksRes{Count: len(st.Leaks) + st.LeaksOverflow}, nil
 	}
-	return LeaksRes{Count: len(st.Leaks)}, nil
+	st.Leaks = append(st.Leaks, l)
+	return LeaksRes{Count: len(st.Leaks) + st.LeaksOverflow}, nil
 }
 
 func clearLeaks(_ workflow.Context, ec *entdefine.Ctx[pipeline.AgentSpec, State], cmd ClearLeaksCmd) (LeaksRes, error) {
 	st := ec.State()
 	if cmd.Ref == "" {
 		st.Leaks = nil
+		st.LeaksOverflow = 0
 		return LeaksRes{}, nil
 	}
 	kept := st.Leaks[:0]
@@ -230,10 +235,10 @@ func clearLeaks(_ workflow.Context, ec *entdefine.Ctx[pipeline.AgentSpec, State]
 		kept = append(kept, l)
 	}
 	if !found {
-		return LeaksRes{Count: len(st.Leaks)}, fmt.Errorf("no leak of %s on this machine", cmd.Ref)
+		return LeaksRes{Count: len(st.Leaks) + st.LeaksOverflow}, fmt.Errorf("no leak of %s on this machine", cmd.Ref)
 	}
 	st.Leaks = kept
-	return LeaksRes{Count: len(st.Leaks)}, nil
+	return LeaksRes{Count: len(st.Leaks) + st.LeaksOverflow}, nil
 }
 
 // PublishCapabilityCmd writes what the machine now CAN onto its record:

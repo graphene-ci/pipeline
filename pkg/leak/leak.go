@@ -8,6 +8,7 @@ package leak
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"go.temporal.io/sdk/temporal"
@@ -25,11 +26,14 @@ func Report(ctx workflow.Context, cause error) {
 	info := workflow.GetInfo(ctx)
 	ref := info.WorkflowExecution.ID
 	log := workflow.GetLogger(ctx)
-	agent, _, onMachine := wire.ParseAgentRunQueue(info.TaskQueueName)
-	if !onMachine {
+	// Any agent queue reports, parsable or not: the server resolves the
+	// machine from the caller and refuses what it cannot attribute, so a
+	// malformed queue surfaces as an error instead of a silent skip.
+	if !strings.HasPrefix(info.TaskQueueName, "agent/") {
 		log.Warn("removal gave up; the record is not on a machine", "record", ref, "error", cause)
 		return
 	}
+	agent, _, _ := wire.ParseAgentRunQueue(info.TaskQueueName)
 	if cause == nil {
 		cause = errors.New("removal gave up")
 	}

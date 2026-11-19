@@ -32,6 +32,12 @@ func validate(kind, s string) error {
 	if strings.ContainsAny(s, " \t\n") {
 		return fmt.Errorf("%s id %q contains whitespace", kind, s)
 	}
+	// An id is one segment: records are addressed "kind/id" and queues
+	// "agent/<agent>/run/<run>", and a slash inside an id makes both
+	// ambiguous.
+	if strings.Contains(s, "/") {
+		return fmt.Errorf("%s id %q contains a slash", kind, s)
+	}
 	return nil
 }
 

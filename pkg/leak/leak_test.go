@@ -31,6 +31,10 @@ func TestReport(t *testing.T) {
 			want: &wire.ReportLeakRequest{Error: "daemon gone"},
 		},
 		{name: "a record off any machine only logs", queue: wire.RunQueue("run-1"), serverUp: true},
+		{
+			name: "an unparsable machine queue still reports; the server decides", queue: "agent/a/b/run/c", serverUp: true,
+			want: &wire.ReportLeakRequest{Error: "daemon gone"},
+		},
 		{name: "an unreachable server does not fail the finalize", queue: wire.AgentRunQueue("db", "run-1")},
 	}
 	for _, c := range cases {

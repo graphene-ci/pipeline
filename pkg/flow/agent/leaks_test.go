@@ -84,8 +84,9 @@ func runLeaks(t *testing.T, steps []step) []Leak {
 	return leaks
 }
 
-// The state rides every Continue-as-New: leaks are capped, the newest
-// kept, oversized fields clipped.
+// The state rides every Continue-as-New: leaks are capped and fields
+// clipped, but a listed leak is never pushed out — past the cap a report
+// is counted, and the count is part of every answer.
 func TestLeaksAreBounded(t *testing.T) {
 	t.Parallel()
 	steps := make([]step, 0, MaxLeaks+2)
@@ -93,11 +94,11 @@ func TestLeaksAreBounded(t *testing.T) {
 		steps = append(steps, step{
 			name:    "report-leak",
 			payload: ReportLeakCmd{Ref: fmt.Sprintf("docker/c-%03d", i), Error: strings.Repeat("e", 4096)},
-			count:   min(i+1, MaxLeaks),
+			count:   i + 1,
 		})
 	}
 	leaks := runLeaks(t, steps)
-	if len(leaks) != MaxLeaks || leaks[0].Ref != "docker/c-002" || leaks[len(leaks)-1].Ref != fmt.Sprintf("docker/c-%03d", MaxLeaks+1) {
+	if len(leaks) != MaxLeaks || leaks[0].Ref != "docker/c-000" || leaks[len(leaks)-1].Ref != fmt.Sprintf("docker/c-%03d", MaxLeaks-1) {
 		t.Fatalf("kept %d leaks, first %s", len(leaks), leaks[0].Ref)
 	}
 	if len(leaks[0].Error) != maxLeakError {
