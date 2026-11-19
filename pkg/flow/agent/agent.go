@@ -38,6 +38,17 @@ type State struct {
 	// on the RECORD, so every reader gets it from the state instead of
 	// asking the registry.
 	Facts *MachineFacts `json:"facts,omitempty"`
+	// Leaks are what records left on the machine when their removal gave
+	// up. A machine with leaks is dirty until they are cleared.
+	Leaks []Leak `json:"leaks,omitempty"`
+}
+
+// Leak is one leftover on the machine.
+type Leak struct {
+	// Ref is the record that could not clean up ("kind/id").
+	Ref   string    `json:"ref"`
+	Error string    `json:"error"`
+	At    time.Time `json:"at"`
 }
 
 // Ops is the side-effect boundary of the machine flow. Implemented by the
@@ -127,8 +138,83 @@ func Definition(opts Options) *entdefine.Definition[pipeline.AgentSpec, State] {
 		entdefine.WithSearchAttributes[pipeline.AgentSpec, State](true),
 	)
 	entdefine.Handle(def, publishCapability)
+	entdefine.Handle(def, reportLeak)
+	entdefine.Handle(def, clearLeaks)
 	ownership.Register(def, func(st *State) *ownership.State { return &st.State })
 	return def
+}
+
+// ReportLeakCmd records a leftover on the machine; the same record
+// reporting again replaces its entry.
+type ReportLeakCmd struct {
+	Ref   string `json:"ref"`
+	Error string `json:"error"`
+}
+
+// Name is the command's wire identity.
+func (ReportLeakCmd) Name() entity.CommandName { return "report-leak" }
+
+// Result binds the response type.
+func (ReportLeakCmd) Result() LeaksRes { return LeaksRes{} }
+
+// Validate rejects a leak that names no record.
+func (c ReportLeakCmd) Validate() error {
+	if c.Ref == "" {
+		return fmt.Errorf("leak needs the record that left it")
+	}
+	return nil
+}
+
+// ClearLeaksCmd says leftovers are gone: one record's, or all with an
+// empty Ref. Whoever clears has cleaned the machine (or accepts it).
+type ClearLeaksCmd struct {
+	Ref string `json:"ref,omitempty"`
+}
+
+// Name is the command's wire identity.
+func (ClearLeaksCmd) Name() entity.CommandName { return "clear-leaks" }
+
+// Result binds the response type.
+func (ClearLeaksCmd) Result() LeaksRes { return LeaksRes{} }
+
+// LeaksRes reports the leaks left on the record.
+type LeaksRes struct {
+	Count int `json:"count"`
+}
+
+func reportLeak(ctx workflow.Context, ec *entdefine.Ctx[pipeline.AgentSpec, State], cmd ReportLeakCmd) (LeaksRes, error) {
+	st := ec.State()
+	l := Leak{Ref: cmd.Ref, Error: cmd.Error, At: workflow.Now(ctx)}
+	for i, have := range st.Leaks {
+		if have.Ref == cmd.Ref {
+			st.Leaks[i] = l
+			return LeaksRes{Count: len(st.Leaks)}, nil
+		}
+	}
+	st.Leaks = append(st.Leaks, l)
+	return LeaksRes{Count: len(st.Leaks)}, nil
+}
+
+func clearLeaks(_ workflow.Context, ec *entdefine.Ctx[pipeline.AgentSpec, State], cmd ClearLeaksCmd) (LeaksRes, error) {
+	st := ec.State()
+	if cmd.Ref == "" {
+		st.Leaks = nil
+		return LeaksRes{}, nil
+	}
+	kept := st.Leaks[:0]
+	found := false
+	for _, l := range st.Leaks {
+		if l.Ref == cmd.Ref {
+			found = true
+			continue
+		}
+		kept = append(kept, l)
+	}
+	if !found {
+		return LeaksRes{Count: len(st.Leaks)}, fmt.Errorf("no leak of %s on this machine", cmd.Ref)
+	}
+	st.Leaks = kept
+	return LeaksRes{Count: len(st.Leaks)}, nil
 }
 
 // PublishCapabilityCmd writes what the machine now CAN onto its record:

@@ -32,6 +32,20 @@ func AgentRunQueue(m id.AgentId, r id.RunId) string {
 	return "agent/" + string(m) + "/run/" + string(r)
 }
 
+// ParseAgentRunQueue is AgentRunQueue's inverse: the machine and run a
+// queue serves; ok=false for any other queue.
+func ParseAgentRunQueue(q string) (id.AgentId, id.RunId, bool) {
+	rest, ok := strings.CutPrefix(q, "agent/")
+	if !ok {
+		return "", "", false
+	}
+	m, r, ok := strings.Cut(rest, "/run/")
+	if !ok || m == "" || r == "" {
+		return "", "", false
+	}
+	return id.AgentId(m), id.RunId(r), true
+}
+
 // RunQueue names the task queue of a run's main worker (managed container
 // or inplace binary): the run workflow and machine-independent activities.
 func RunQueue(r id.RunId) string {
@@ -77,6 +91,10 @@ const (
 	// PublishCapabilityActivity writes a capability onto a machine's
 	// record.
 	PublishCapabilityActivity = "server.capability.publish"
+	// ReportLeakActivity records on a machine's record that something a
+	// record put on the machine outlived it: the record's removal gave
+	// up. The machine is dirty until the leak is cleared.
+	ReportLeakActivity = "server.leak.report"
 
 	// StartChildRunActivity starts (or attaches to) a CHILD run owned by
 	// the calling run: the server raises the child's managed container on
@@ -93,6 +111,16 @@ const (
 	// instead of re-running. The caller must own the child.
 	AwaitChildRunActivity = "server.run.await-child"
 )
+
+// ReportLeakRequest names what a record left on a machine when its
+// removal gave up.
+type ReportLeakRequest struct {
+	Agent id.AgentId `json:"agent"`
+	// Ref is the record that leaked ("kind/id").
+	Ref string `json:"ref"`
+	// Error is why the removal gave up.
+	Error string `json:"error"`
+}
 
 // StartChildRunRequest asks the server to start a child run under the
 // calling run. The parent (owner) is derived server-side from the
