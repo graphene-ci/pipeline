@@ -33,17 +33,15 @@ func AgentRunQueue(m id.AgentId, r id.RunId) string {
 }
 
 // ParseAgentRunQueue is AgentRunQueue's inverse: the machine and run a
-// queue serves; ok=false for any other queue.
+// queue serves; ok=false for any other queue. A queue whose ids contain a
+// slash is ambiguous — "agent/a/run/b/run/c" splits two ways — and is
+// refused rather than attributed to a guess.
 func ParseAgentRunQueue(q string) (id.AgentId, id.RunId, bool) {
-	rest, ok := strings.CutPrefix(q, "agent/")
-	if !ok {
+	parts := strings.Split(q, "/")
+	if len(parts) != 4 || parts[0] != "agent" || parts[2] != "run" || parts[1] == "" || parts[3] == "" {
 		return "", "", false
 	}
-	m, r, ok := strings.Cut(rest, "/run/")
-	if !ok || m == "" || r == "" {
-		return "", "", false
-	}
-	return id.AgentId(m), id.RunId(r), true
+	return id.AgentId(parts[1]), id.RunId(parts[3]), true
 }
 
 // RunQueue names the task queue of a run's main worker (managed container
@@ -112,13 +110,11 @@ const (
 	AwaitChildRunActivity = "server.run.await-child"
 )
 
-// ReportLeakRequest names what a record left on a machine when its
-// removal gave up.
+// ReportLeakRequest says why a record's removal gave up. WHICH record and
+// WHICH machine are not in it: the server takes the record from the
+// calling workflow and the machine from that workflow's own task queue,
+// so a caller cannot dirty a machine it does not run on.
 type ReportLeakRequest struct {
-	Agent id.AgentId `json:"agent"`
-	// Ref is the record that leaked ("kind/id").
-	Ref string `json:"ref"`
-	// Error is why the removal gave up.
 	Error string `json:"error"`
 }
 

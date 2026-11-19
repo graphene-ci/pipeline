@@ -28,7 +28,7 @@ func TestReport(t *testing.T) {
 	}{
 		{
 			name: "a machine record reports to its agent", queue: wire.AgentRunQueue("db", "run-1"), serverUp: true,
-			want: &wire.ReportLeakRequest{Agent: "db", Ref: "docker/pg", Error: "daemon gone"},
+			want: &wire.ReportLeakRequest{Error: "daemon gone"},
 		},
 		{name: "a record off any machine only logs", queue: wire.RunQueue("run-1"), serverUp: true},
 		{name: "an unreachable server does not fail the finalize", queue: wire.AgentRunQueue("db", "run-1")},

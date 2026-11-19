@@ -43,7 +43,7 @@ func Report(ctx workflow.Context, cause error) {
 			MaximumInterval:    30 * time.Second,
 		},
 	})
-	req := wire.ReportLeakRequest{Agent: agent, Ref: ref, Error: cause.Error()}
+	req := wire.ReportLeakRequest{Error: cause.Error()}
 	if err := workflow.ExecuteActivity(actx, wire.ReportLeakActivity, req).Get(ctx, nil); err != nil {
 		log.Error("leak not recorded on the machine", "record", ref, "agent", string(agent), "error", err, "leak", cause)
 		return

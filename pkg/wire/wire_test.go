@@ -24,6 +24,8 @@ func TestParseAgentRunQueue(t *testing.T) {
 		{queue: ServerQueue},
 		{queue: "agent//run/r"},
 		{queue: "agent/m/run/"},
+		{queue: "agent/a/run/b/run/c"},
+		{queue: "agent/a/b/run/c"},
 	}
 	for _, c := range cases {
 		t.Run(c.queue, func(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,6 +82,27 @@ func runLeaks(t *testing.T, steps []step) []Leak {
 	}, time.Duration(len(steps)+1)*time.Second)
 	env.ExecuteWorkflow(string(Kind), map[string]any{"spec": pipeline.AgentSpec{}})
 	return leaks
+}
+
+// The state rides every Continue-as-New: leaks are capped, the newest
+// kept, oversized fields clipped.
+func TestLeaksAreBounded(t *testing.T) {
+	t.Parallel()
+	steps := make([]step, 0, MaxLeaks+2)
+	for i := range MaxLeaks + 2 {
+		steps = append(steps, step{
+			name:    "report-leak",
+			payload: ReportLeakCmd{Ref: fmt.Sprintf("docker/c-%03d", i), Error: strings.Repeat("e", 4096)},
+			count:   min(i+1, MaxLeaks),
+		})
+	}
+	leaks := runLeaks(t, steps)
+	if len(leaks) != MaxLeaks || leaks[0].Ref != "docker/c-002" || leaks[len(leaks)-1].Ref != fmt.Sprintf("docker/c-%03d", MaxLeaks+1) {
+		t.Fatalf("kept %d leaks, first %s", len(leaks), leaks[0].Ref)
+	}
+	if len(leaks[0].Error) != maxLeakError {
+		t.Fatalf("error not clipped: %d bytes", len(leaks[0].Error))
+	}
 }
 
 func TestLeaks(t *testing.T) {

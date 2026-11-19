@@ -182,16 +182,35 @@ type LeaksRes struct {
 	Count int `json:"count"`
 }
 
+// Leak bounds: the record's state rides every Continue-as-New, so what a
+// caller sends is capped. A machine with MaxLeaks leftovers is as dirty as
+// one with more; the newest are kept.
+const (
+	MaxLeaks     = 100
+	maxLeakRef   = 256
+	maxLeakError = 1024
+)
+
+func clip(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
+}
+
 func reportLeak(ctx workflow.Context, ec *entdefine.Ctx[pipeline.AgentSpec, State], cmd ReportLeakCmd) (LeaksRes, error) {
 	st := ec.State()
-	l := Leak{Ref: cmd.Ref, Error: cmd.Error, At: workflow.Now(ctx)}
+	l := Leak{Ref: clip(cmd.Ref, maxLeakRef), Error: clip(cmd.Error, maxLeakError), At: workflow.Now(ctx)}
 	for i, have := range st.Leaks {
-		if have.Ref == cmd.Ref {
+		if have.Ref == l.Ref {
 			st.Leaks[i] = l
 			return LeaksRes{Count: len(st.Leaks)}, nil
 		}
 	}
 	st.Leaks = append(st.Leaks, l)
+	if over := len(st.Leaks) - MaxLeaks; over > 0 {
+		st.Leaks = append([]Leak(nil), st.Leaks[over:]...)
+	}
 	return LeaksRes{Count: len(st.Leaks)}, nil
 }
 
