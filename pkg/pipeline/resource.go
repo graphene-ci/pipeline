@@ -141,6 +141,9 @@ type ResourceOptions struct {
 	// topology's second axis (Р-Н25). Annotation for the UI; the system
 	// does not act on them.
 	Flows []Flow
+	// Decommission says what deleting an AGENT record does to the agent on
+	// the machine (agents only).
+	Decommission Decommission
 }
 
 // Flow is a declared outgoing edge — re-exported from ownership so
@@ -231,6 +234,42 @@ func Need(name string, constraints ...NeedConstraint) ResourceOption {
 		c(&spec)
 	}
 	return func(o *ResourceOptions) { o.Needs = append(o.Needs, spec) }
+}
+
+// Decommission is what deleting an agent record does to the agent
+// process on the machine.
+type Decommission string
+
+// Decommission policies.
+const (
+	// DecommissionNone leaves the agent installed: the record goes, the
+	// machine is someone else's to clean (a VM that dies with its stand).
+	DecommissionNone Decommission = ""
+	// DecommissionBestEffort uninstalls the agent — over its live session,
+	// or over the record's ssh when it is offline — for a bounded time;
+	// failing that, the record still goes and its state says the agent
+	// may remain on the machine.
+	DecommissionBestEffort Decommission = "best-effort"
+	// DecommissionGuaranteed uninstalls the agent and keeps the record in
+	// deletion until it is done: a machine Graphene does not own must be
+	// returned clean.
+	DecommissionGuaranteed Decommission = "guaranteed"
+)
+
+// Validate rejects an unknown policy.
+func (d Decommission) Validate() error {
+	switch d {
+	case DecommissionNone, DecommissionBestEffort, DecommissionGuaranteed:
+		return nil
+	default:
+		return fmt.Errorf("decommission %q: want best-effort or guaranteed", string(d))
+	}
+}
+
+// WithDecommission sets what deleting an agent record does to the agent
+// on the machine.
+func WithDecommission(d Decommission) ResourceOption {
+	return func(o *ResourceOptions) { o.Decommission = d }
 }
 
 // NeedConstraint narrows a capability requirement.

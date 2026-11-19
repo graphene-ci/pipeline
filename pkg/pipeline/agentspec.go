@@ -59,10 +59,16 @@ type AgentSpec struct {
 	// peer. The agent's own virtual edges to the server are added by the
 	// record, not carried here.
 	Flows []ownership.Flow `json:"flows,omitempty"`
+	// Decommission is what deleting the record does to the agent on the
+	// machine.
+	Decommission Decommission `json:"decommission,omitempty"`
 }
 
 // Validate checks the spec structurally (deterministic).
 func (s AgentSpec) Validate() error {
+	if err := s.Decommission.Validate(); err != nil {
+		return err
+	}
 	if s.SSH != nil {
 		if err := s.SSH.Validate(); err != nil {
 			return err
@@ -87,6 +93,9 @@ type AgentState struct {
 	// discovered: each exists because something published it (an
 	// installer, a person, a machine image).
 	Capabilities []Capability `json:"capabilities,omitempty"`
+	// AgentMayRemain is set when a best-effort decommission gave up: the
+	// record is gone, the agent may still be installed on the machine.
+	AgentMayRemain bool `json:"agentMayRemain,omitempty"`
 }
 
 // Capability is one thing a machine can do. Part of the machine's

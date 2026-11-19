@@ -41,6 +41,10 @@ type State struct {
 	// Leaks are what records left on the machine when their removal gave
 	// up. A machine with leaks is dirty until they are cleared.
 	Leaks []Leak `json:"leaks,omitempty"`
+	// Decommission and SSH are kept from the spec at init: the finalize
+	// uninstalls the agent by them, and a finalize sees state, not spec.
+	Decommission pipeline.Decommission `json:"decommission,omitempty"`
+	SSH          *pipeline.SSHInstall  `json:"ssh,omitempty"`
 	// LeaksOverflow counts reports that arrived while Leaks was full. The
 	// listed leaks are never pushed out — they still need cleaning — and
 	// the overflow keeps the machine dirty until every leak is cleared.
@@ -64,6 +68,9 @@ type Ops interface {
 	// AgentStatus reports whether the agent of the machine is currently
 	// connected and, if so, its addresses and the digest of its facts.
 	AgentStatus(agentId id.AgentId) (AgentStatus, error)
+	// Decommission takes the agent off its machine: over its live session,
+	// else over ssh when the record has it; done when the agent is gone.
+	Decommission(agentId id.AgentId, ssh *pipeline.SSHInstall) error
 }
 
 // AgentStatus is what the agent registry reports about a machine.
@@ -118,8 +125,9 @@ type InterfaceAddrs struct {
 
 // Activity names (registered by the server against its Ops).
 const (
-	InstallSSHActivity  = "agent.install-ssh"
-	AgentStatusActivity = "agent.status"
+	InstallSSHActivity   = "agent.install-ssh"
+	AgentStatusActivity  = "agent.status"
+	DecommissionActivity = "agent.decommission"
 )
 
 // Options tune the machine flow.
@@ -359,6 +367,8 @@ func initMachine(ctx workflow.Context, opts Options, spec pipeline.AgentSpec) (S
 	if spec.Owner != "" {
 		ownership.Init(ctx, &st.State, spec.Owner)
 	}
+	st.Decommission = spec.Decommission
+	st.SSH = spec.SSH
 	mid := agentId(ctx)
 	actx := activityCtx(ctx)
 
@@ -391,16 +401,46 @@ func initMachine(ctx workflow.Context, opts Options, spec pipeline.AgentSpec) (S
 	return st, fmt.Errorf("agent did not connect within %s", opts.ConnectTimeout)
 }
 
+// decommissionVersion gates the uninstall in finalize: records whose
+// histories predate it replay without the new activity.
+const decommissionVersion = "agent-decommission"
+
 // finalizeMachine is the record's last word. A deleted record is still
 // read by name, and "connected" there means "this record can take work":
 // left at its last live value, a record that is gone would go on saying
-// yes. The agent PROCESS may well still be connected — that is the
-// machine's business; what it knew (addresses, facts, capabilities) stays
-// as the record's history. No activity runs here: nothing on the machine
-// is touched.
-func finalizeMachine(_ workflow.Context, st *State) error {
+// yes. What it knew (addresses, facts, capabilities) stays as the record's
+// history. The agent process on the machine is touched only when the
+// record asked for it (Decommission): uninstalled for a bounded time
+// (best-effort, then AgentMayRemain), or until it is done (guaranteed —
+// the record stays in deletion).
+func finalizeMachine(ctx workflow.Context, st *State) error {
+	if st.Decommission != pipeline.DecommissionNone &&
+		workflow.GetVersion(ctx, decommissionVersion, workflow.DefaultVersion, 1) != workflow.DefaultVersion {
+		err := workflow.ExecuteActivity(decommissionCtx(ctx, st.Decommission), DecommissionActivity, agentId(ctx), st.SSH).Get(ctx, nil)
+		if err != nil {
+			workflow.GetLogger(ctx).Warn("decommission gave up: the agent may remain on the machine", "error", err)
+			st.AgentMayRemain = true
+		}
+	}
 	st.AgentConnected = false
 	return nil
+}
+
+// decommissionCtx bounds a best-effort uninstall and lets a guaranteed one
+// retry until it is done.
+func decommissionCtx(ctx workflow.Context, policy pipeline.Decommission) workflow.Context {
+	opts := workflow.ActivityOptions{
+		StartToCloseTimeout: 5 * time.Minute,
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    10 * time.Second,
+			BackoffCoefficient: 2,
+			MaximumInterval:    5 * time.Minute,
+		},
+	}
+	if policy != pipeline.DecommissionGuaranteed {
+		opts.ScheduleToCloseTimeout = 15 * time.Minute
+	}
+	return workflow.WithActivityOptions(ctx, opts)
 }
 
 func reconcileMachine(ctx workflow.Context, ec *entdefine.Ctx[pipeline.AgentSpec, State]) error {
