@@ -6,7 +6,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.4
 	github.com/google/go-containerregistry v0.21.9
 	github.com/gopherex/schemapb/go v0.0.0-20260923103231-06c47e842fa3
-	github.com/graphene-ci/temporal-entity v0.0.0-20260824103956-3919c84e4abb
+	github.com/graphene-ci/temporal-entity v0.1.1-0.20261119110929-fd9552c1c3f1
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3
 	github.com/stretchr/testify v1.12.0
 	go.opentelemetry.io/otel v1.45.0
