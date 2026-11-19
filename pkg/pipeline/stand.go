@@ -37,8 +37,9 @@ func ToStand(ctx Context, h Handle, opts ...TransferOption) {
 		if err := o.stand.Validate(); err != nil {
 			panic(resourceFailure{err: fmt.Errorf("to stand: %w", err)})
 		}
+		// The server lets a run create only its own pipeline's stand; a
+		// named one must exist.
 		req.NewOwner = wire.NamedStandOwner(o.stand)
-		req.Named = true
 	}
 	if err := workflow.ExecuteActivity(serverCtx(ctx), wire.TransferResourceActivity, req).Get(ctx, nil); err != nil {
 		panic(resourceFailure{err: err})

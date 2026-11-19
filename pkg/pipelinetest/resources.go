@@ -207,10 +207,11 @@ func (w *World) transfer(ctx workflow.Context, req wire.TransferResourceRequest)
 	if err := req.NewOwner.Validate(); err != nil {
 		return err
 	}
-	if req.Named {
-		name := id.StandId(strings.TrimPrefix(string(req.NewOwner), "stand/"))
+	// As on the server: a run creates only its own pipeline's stand (the
+	// run workflow's type is its pipeline); any other must be declared.
+	if name, toStand := strings.CutPrefix(string(req.NewOwner), "stand/"); toStand && name != workflow.GetInfo(ctx).WorkflowType.Name {
 		w.mu.Lock()
-		exists := w.stands[name]
+		exists := w.stands[id.StandId(name)]
 		w.mu.Unlock()
 		if !exists {
 			return fmt.Errorf("stand %s does not exist: apply it first", name)

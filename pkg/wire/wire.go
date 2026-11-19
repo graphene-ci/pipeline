@@ -182,10 +182,6 @@ type TransferResourceRequest struct {
 	// when the transfer comes from a run). The stand will not tear a
 	// holding down from under its still-running origin.
 	From string `json:"from,omitempty"`
-	// Named says NewOwner is a named stand that must already exist: a
-	// typo never creates a stand on the fly. Without it a stand owner is
-	// the pipeline's own, created on first use.
-	Named bool `json:"named,omitempty"`
 }
 
 // StandOwner is the owner reference of a pipeline's Stand — the
