@@ -27,9 +27,10 @@ type SSHInstall struct {
 	HostKey string `json:"hostKey,omitempty"`
 	// TrustFirstHostKey is the explicit exception for machines whose key
 	// cannot be known beforehand (a provider that installs the OS and
-	// reports no host key): the key the machine presents on the first
-	// connection is pinned on the agent record, and every later ssh use
-	// verifies against it — a different key is a final host_key_mismatch.
+	// reports no host key): the key the machine presents on a first
+	// connection that sends nothing is pinned on the agent record, and
+	// every ssh use — the install itself included — verifies against it;
+	// a different key is a final host_key_mismatch.
 	// Allowed only without HostKey; never the default.
 	TrustFirstHostKey bool `json:"trustFirstHostKey,omitempty"`
 }

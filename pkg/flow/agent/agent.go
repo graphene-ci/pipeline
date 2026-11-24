@@ -65,9 +65,12 @@ type Leak struct {
 type Ops interface {
 	// InstallSSH goes to the existing machine over ssh and runs the agent
 	// install script — the same bytes a fresh VM gets through user-data.
-	// It returns the host key the machine presented (one authorized_keys
-	// line): with TrustFirstHostKey, that is the key the record pins.
-	InstallSSH(agentId id.AgentId, install pipeline.SSHInstall) (string, error)
+	// The install always carries a pinned HostKey.
+	InstallSSH(agentId id.AgentId, install pipeline.SSHInstall) error
+	// HostKey reads the key a machine presents (one authorized_keys line)
+	// and sends nothing: no login, no script. Trust on first use pins it
+	// before anything is sent.
+	HostKey(address string) (string, error)
 	// AgentStatus reports whether the agent of the machine is currently
 	// connected and, if so, its addresses and the digest of its facts.
 	AgentStatus(agentId id.AgentId) (AgentStatus, error)
@@ -132,6 +135,7 @@ type InterfaceAddrs struct {
 // Activity names (registered by the server against its Ops).
 const (
 	InstallSSHActivity   = "agent.install-ssh"
+	HostKeyActivity      = "agent.host-key"
 	AgentStatusActivity  = "agent.status"
 	DecommissionActivity = "agent.decommission"
 )
@@ -374,25 +378,29 @@ func initMachine(ctx workflow.Context, opts Options, spec pipeline.AgentSpec) (S
 		ownership.Init(ctx, &st.State, spec.Owner)
 	}
 	st.Decommission = spec.Decommission
-	st.SSH = spec.SSH
 	mid := agentId(ctx)
 	actx := activityCtx(ctx)
 
 	// The only acting case: put the agent on an existing machine over ssh.
 	if spec.SSH != nil {
-		var presented string
-		if err := workflow.ExecuteActivity(actx, InstallSSHActivity, mid, *spec.SSH).Get(ctx, &presented); err != nil {
-			return st, fmt.Errorf("ssh install: %w", err)
-		}
-		// Trust on first use, pinned: every later ssh use of this record
-		// (the offline uninstall) verifies against the key seen now.
-		if spec.SSH.TrustFirstHostKey {
-			if presented == "" {
-				return st, errors.New("ssh install pinned no host key")
+		install := *spec.SSH
+		// Trust on first use, pinned: the key is read by an activity that
+		// sends nothing and recorded in the workflow BEFORE the install, so
+		// the token travels only over a pinned connection, a retry meets
+		// the same key, and every later ssh use (the offline uninstall)
+		// verifies against it.
+		if install.TrustFirstHostKey {
+			if err := workflow.ExecuteActivity(actx, HostKeyActivity, install.Address).Get(ctx, &install.HostKey); err != nil {
+				return st, fmt.Errorf("read the host key: %w", err)
 			}
-			pinned := *spec.SSH
-			pinned.HostKey, pinned.TrustFirstHostKey = presented, false
-			st.SSH = &pinned
+			if install.HostKey == "" {
+				return st, errors.New("the machine presented no host key")
+			}
+			install.TrustFirstHostKey = false
+		}
+		st.SSH = &install
+		if err := workflow.ExecuteActivity(actx, InstallSSHActivity, mid, install).Get(ctx, nil); err != nil {
+			return st, fmt.Errorf("ssh install: %w", err)
 		}
 	}
 
