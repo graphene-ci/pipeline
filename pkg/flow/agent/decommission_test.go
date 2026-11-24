@@ -54,8 +54,9 @@ func TestDecommissionOnDelete(t *testing.T) {
 				}
 				return nil
 			}, activity.RegisterOptions{Name: DecommissionActivity})
-			env.RegisterActivityWithOptions(func(context.Context, id.AgentId, pipeline.SSHInstall) error { return nil },
-				activity.RegisterOptions{Name: InstallSSHActivity})
+			env.RegisterActivityWithOptions(func(context.Context, id.AgentId, pipeline.SSHInstall) (string, error) {
+				return "ssh-ed25519 AAAA", nil
+			}, activity.RegisterOptions{Name: InstallSSHActivity})
 			env.RegisterDelayedCallback(func() { env.SignalWorkflow(entity.DeleteSignalName, nil) }, time.Minute)
 			spec := pipeline.AgentSpec{Decommission: c.policy, SSH: &pipeline.SSHInstall{Address: "10.0.0.5", User: "root", KeyRef: ref.SecretRef{Name: "key"}, HostKey: "ssh-ed25519 AAAA"}}
 			env.SetStartWorkflowOptions(client.StartWorkflowOptions{ID: "agent/manual-1"})
@@ -79,6 +80,55 @@ func TestDecommissionOnDelete(t *testing.T) {
 			}
 			if final.AgentMayRemain != c.remains || final.AgentConnected {
 				t.Fatalf("state remains=%v connected=%v, want remains=%v", final.AgentMayRemain, final.AgentConnected, c.remains)
+			}
+		})
+	}
+}
+
+// A machine whose key cannot be known beforehand is trusted on first use
+// and pinned: the record keeps the key the install saw, and the uninstall
+// later verifies against it instead of trusting anew.
+func TestTrustFirstHostKeyPins(t *testing.T) {
+	t.Parallel()
+	const presented = "ssh-ed25519 AAAAfirst"
+	cases := []struct {
+		name    string
+		install pipeline.SSHInstall
+		pinned  string
+	}{
+		{name: "known key stays", install: pipeline.SSHInstall{HostKey: "ssh-ed25519 AAAAknown"}, pinned: "ssh-ed25519 AAAAknown"},
+		{name: "first key is pinned", install: pipeline.SSHInstall{TrustFirstHostKey: true}, pinned: presented},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			var suite testsuite.WorkflowTestSuite
+			env := suite.NewTestWorkflowEnvironment()
+			if err := Definition(Options{}).Register(env); err != nil {
+				t.Fatal(err)
+			}
+			env.RegisterActivityWithOptions(func(context.Context, id.AgentId) (AgentStatus, error) {
+				return AgentStatus{Connected: true}, nil
+			}, activity.RegisterOptions{Name: AgentStatusActivity})
+			env.RegisterActivityWithOptions(func(context.Context, id.AgentId, pipeline.SSHInstall) (string, error) {
+				return presented, nil
+			}, activity.RegisterOptions{Name: InstallSSHActivity})
+			var uninstalledWith *pipeline.SSHInstall
+			env.RegisterActivityWithOptions(func(_ context.Context, _ id.AgentId, ssh *pipeline.SSHInstall) error {
+				uninstalledWith = ssh
+				return nil
+			}, activity.RegisterOptions{Name: DecommissionActivity})
+			env.RegisterDelayedCallback(func() { env.SignalWorkflow(entity.DeleteSignalName, nil) }, time.Minute)
+			install := c.install
+			install.Address, install.User, install.KeyRef = "10.0.0.5", "root", ref.SecretRef{Name: "key"}
+			spec := pipeline.AgentSpec{Decommission: pipeline.DecommissionBestEffort, SSH: &install}
+			env.SetStartWorkflowOptions(client.StartWorkflowOptions{ID: "agent/manual-1"})
+			env.ExecuteWorkflow(string(Kind), map[string]any{"spec": spec})
+			if err := env.GetWorkflowError(); err != nil {
+				t.Fatal(err)
+			}
+			if uninstalledWith == nil || uninstalledWith.HostKey != c.pinned || uninstalledWith.TrustFirstHostKey {
+				t.Fatalf("uninstall ssh = %+v, want the pinned key %q", uninstalledWith, c.pinned)
 			}
 		})
 	}

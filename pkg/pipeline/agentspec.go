@@ -21,11 +21,22 @@ type SSHInstall struct {
 	// KeyRef names the secret holding the private key.
 	KeyRef ref.SecretRef `json:"keyRef"`
 	// HostKey is the machine's public key (one line of known_hosts).
-	// Required, deliberately: trust-on-first-use is what a person at a
-	// terminal does; this is a control plane opening a root shell and
-	// feeding it a script with an installation token in it.
-	HostKey string `json:"hostKey"`
+	// Required unless TrustFirstHostKey, deliberately: trust-on-first-use
+	// is what a person at a terminal does; this is a control plane opening
+	// a root shell and feeding it a script with an installation token in it.
+	HostKey string `json:"hostKey,omitempty"`
+	// TrustFirstHostKey is the explicit exception for machines whose key
+	// cannot be known beforehand (a provider that installs the OS and
+	// reports no host key): the key the machine presents on the first
+	// connection is pinned on the agent record, and every later ssh use
+	// verifies against it — a different key is a final host_key_mismatch.
+	// Allowed only without HostKey; never the default.
+	TrustFirstHostKey bool `json:"trustFirstHostKey,omitempty"`
 }
+
+// CodeHostKeyMismatch is the error type of an ssh connection whose
+// machine presented a key other than the pinned one.
+const CodeHostKeyMismatch = "host_key_mismatch"
 
 // Validate checks the install request structurally.
 func (s SSHInstall) Validate() error {
@@ -35,8 +46,11 @@ func (s SSHInstall) Validate() error {
 	if s.KeyRef.Name == "" {
 		return errors.New("ssh install requires a key secret name")
 	}
-	if s.HostKey == "" {
-		return errors.New("ssh install requires the machine host key")
+	switch {
+	case s.HostKey == "" && !s.TrustFirstHostKey:
+		return errors.New("ssh install requires the machine host key, or an explicit TrustFirstHostKey")
+	case s.HostKey != "" && s.TrustFirstHostKey:
+		return errors.New("ssh install takes either a host key or TrustFirstHostKey, not both")
 	}
 	return nil
 }

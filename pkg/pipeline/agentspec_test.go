@@ -23,6 +23,8 @@ func TestAgentSpecValidate(t *testing.T) {
 		{"ssh without address", AgentSpec{SSH: &SSHInstall{User: "root", KeyRef: ref.SecretRef{Name: "k"}, HostKey: "hk"}}, false},
 		{"ssh without key", AgentSpec{SSH: &SSHInstall{Address: "h", User: "root", HostKey: "hk"}}, false},
 		{"ssh without host key (no TOFU)", AgentSpec{SSH: &SSHInstall{Address: "h", User: "root", KeyRef: ref.SecretRef{Name: "k"}}}, false},
+		{"explicit trust on first use", AgentSpec{SSH: &SSHInstall{Address: "h", User: "root", KeyRef: ref.SecretRef{Name: "k"}, TrustFirstHostKey: true}}, true},
+		{"host key and TOFU together", AgentSpec{SSH: &SSHInstall{Address: "h", User: "root", KeyRef: ref.SecretRef{Name: "k"}, HostKey: "hk", TrustFirstHostKey: true}}, false},
 		{"bad owner", AgentSpec{Owner: "run"}, false},
 		{"good owner", AgentSpec{Owner: ref.RunOwner("r-1")}, true},
 	}

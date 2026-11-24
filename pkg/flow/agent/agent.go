@@ -12,6 +12,7 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -64,7 +65,9 @@ type Leak struct {
 type Ops interface {
 	// InstallSSH goes to the existing machine over ssh and runs the agent
 	// install script — the same bytes a fresh VM gets through user-data.
-	InstallSSH(agentId id.AgentId, install pipeline.SSHInstall) error
+	// It returns the host key the machine presented (one authorized_keys
+	// line): with TrustFirstHostKey, that is the key the record pins.
+	InstallSSH(agentId id.AgentId, install pipeline.SSHInstall) (string, error)
 	// AgentStatus reports whether the agent of the machine is currently
 	// connected and, if so, its addresses and the digest of its facts.
 	AgentStatus(agentId id.AgentId) (AgentStatus, error)
@@ -377,8 +380,19 @@ func initMachine(ctx workflow.Context, opts Options, spec pipeline.AgentSpec) (S
 
 	// The only acting case: put the agent on an existing machine over ssh.
 	if spec.SSH != nil {
-		if err := workflow.ExecuteActivity(actx, InstallSSHActivity, mid, *spec.SSH).Get(ctx, nil); err != nil {
+		var presented string
+		if err := workflow.ExecuteActivity(actx, InstallSSHActivity, mid, *spec.SSH).Get(ctx, &presented); err != nil {
 			return st, fmt.Errorf("ssh install: %w", err)
+		}
+		// Trust on first use, pinned: every later ssh use of this record
+		// (the offline uninstall) verifies against the key seen now.
+		if spec.SSH.TrustFirstHostKey {
+			if presented == "" {
+				return st, errors.New("ssh install pinned no host key")
+			}
+			pinned := *spec.SSH
+			pinned.HostKey, pinned.TrustFirstHostKey = presented, false
+			st.SSH = &pinned
 		}
 	}
 
